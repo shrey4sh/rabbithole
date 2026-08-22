@@ -62,7 +62,6 @@ fun GraphScreen(
     var selectedId by remember { mutableStateOf<String?>(null) }
     var showSearch by remember { mutableStateOf(false) }
     var showPath by remember { mutableStateOf(false) }
-    var showPath by remember { mutableStateOf(false) }
 
     val selected = hole.nodes.find { it.id == selectedId }
 

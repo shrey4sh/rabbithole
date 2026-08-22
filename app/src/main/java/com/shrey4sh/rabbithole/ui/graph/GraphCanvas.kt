@@ -180,14 +180,17 @@ fun GraphCanvas(
                 // title under node
                 drawIntoCanvas { cv ->
                     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                        // dark halo behind text for readability on any background
+                        setShadowLayer(6f, 0f, 0f, android.graphics.Color.BLACK)
                         this.color = android.graphics.Color.argb(
-                            (255 * alpha).toInt(), 222, 228, 238)
-                        textSize = 13.dp.toPx() / 1f
+                            (255 * alpha).toInt(), 240, 244, 250)
+                        textSize = 15.dp.toPx()
                         textAlign = android.graphics.Paint.Align.CENTER
-                        isFakeBoldText = isSel
+                        isFakeBoldText = true
                     }
+                    val label = if (n.title.length > 18) n.title.take(17) + "…" else n.title
                     cv.nativeCanvas.drawText(
-                        n.title, p.x, p.y + r + 16.dp.toPx(), paint)
+                        label, p.x, p.y + r + 17.dp.toPx(), paint)
                 }
             }
         }

@@ -98,7 +98,27 @@ fun RootApp(storage: LocalStorageRepository) {
             }
         }) { pad ->
         NavHost(navController = nav, startDestination = "home",
-            modifier = Modifier.padding(pad)) {
+            modifier = Modifier.padding(pad),
+            enterTransition = {
+                androidx.compose.animation.slideInHorizontally(
+                    animationSpec = androidx.compose.animation.core.tween(220)) { it / 4 } +
+                    androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220))
+            },
+            exitTransition = {
+                androidx.compose.animation.slideOutHorizontally(
+                    animationSpec = androidx.compose.animation.core.tween(180)) { -it / 5 } +
+                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180))
+            },
+            popEnterTransition = {
+                androidx.compose.animation.slideInHorizontally(
+                    animationSpec = androidx.compose.animation.core.tween(220)) { -it / 4 } +
+                    androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220))
+            },
+            popExitTransition = {
+                androidx.compose.animation.slideOutHorizontally(
+                    animationSpec = androidx.compose.animation.core.tween(180)) { it / 5 } +
+                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180))
+            }) {
             composable("home") {
                 HomeScreen(
                     onSearch = { q -> nav.navigate("discovery/${java.net.URLEncoder.encode(q, "UTF-8")}") },
@@ -128,9 +148,13 @@ fun RootApp(storage: LocalStorageRepository) {
             }
             composable("explore") { EmptyScreen("Explore", "Discover trending rabbit holes — coming soon.") }
             composable("saved") { SavedScreen(onOpenHole = {}) }
-            composable("history") { HistoryScreen(onOpenHole = { hole ->
-                // restore graph exactly where left off
-                nav.navigate("discovery/restore:${hole.id}")
+            composable("restore/{holeId}") { entry ->
+                val holeId = entry.arguments?.getString("holeId") ?: ""
+                com.shrey4sh.rabbithole.ui.history.RestoreRoute(holeId = holeId,
+                    storage = storage, onBack = { nav.popBackStack() })
+            }
+            composable("history") { HistoryScreen(onOpenHole = { id ->
+                nav.navigate("restore/${java.net.URLEncoder.encode(id, "UTF-8")}")
             }) }
             composable("settings") {
                 com.shrey4sh.rabbithole.ui.settings.SettingsScreen(

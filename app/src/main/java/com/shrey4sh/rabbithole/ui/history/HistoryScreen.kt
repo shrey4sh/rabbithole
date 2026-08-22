@@ -54,7 +54,7 @@ private val json = Json { ignoreUnknownKeys = true }
 @Composable
 fun HistoryScreen(
     vm: HistoryViewModel = hiltViewModel(),
-    onOpenHole: (RabbitHole) -> Unit,
+    onOpenHole: (String) -> Unit,
 ) {
     val holes by vm.holes.collectAsState(initial = emptyList())
 
@@ -75,9 +75,7 @@ fun HistoryScreen(
                 java.util.Locale.getDefault()).format(java.util.Date(h.updatedAt))
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                .clickable {
-                    vm.restore(h.id) { hole -> onOpenHole(hole) }
-                }
+                .clickable { onOpenHole(h.id) }
                 .padding(16.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween) {
@@ -91,4 +89,38 @@ fun HistoryScreen(
             }
         }
     }
+}
+
+
+@Composable
+fun RestoreRoute(holeId: String, storage: com.shrey4sh.rabbithole.data.repository.LocalStorageRepository, onBack: () -> Unit) {
+    androidx.compose.runtime.LaunchedEffect(holeId) {
+        // nothing — handled in composable body below
+    }
+    var hole by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<com.shrey4sh.rabbithole.domain.model.RabbitHole?>(null)
+    }
+    var error by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(holeId) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try { hole = storage.restoreHole(holeId) } catch (e: Exception) { error = e.message }
+        }
+    }
+
+    val h = hole
+    if (h == null) {
+        if (error != null) {
+            com.shrey4sh.rabbithole.ui.placeholder.EmptyScreen(
+                "RabbitHole couldn't open that hole.", "Reconnect and try again.")
+        } else {
+            com.shrey4sh.rabbithole.ui.discovery.DiscoveryLoadingScreen("Restoring…")
+        }
+        return
+    }
+    // restore WITHOUT saving again → no "restore-" duplicates in history
+    GraphScreen(
+        hole = h,
+        onBack = onBack,
+    )
 }

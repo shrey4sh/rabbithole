@@ -44,7 +44,7 @@ fun DiscoveryLoadingScreen(topic: String) {
     LaunchedEffect(Unit) {
         STAGES.indices.forEach {
             stage = it
-            kotlinx.coroutines.delay(700)
+            kotlinx.coroutines.delay(450)
         }
     }
 

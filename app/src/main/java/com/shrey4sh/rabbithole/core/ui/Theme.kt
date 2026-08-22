@@ -1,56 +1,73 @@
 package com.shrey4sh.rabbithole.core.ui
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 
 // ---- RabbitHole palette (dark-first, per spec) ----
 val Bg = Color(0xFF08090D)
 val Surface1 = Color(0xFF111318)
 val Surface2 = Color(0xFF171920)
-val Violet = Color(0xFF8B7CFF)
-val Indigo = Color(0xFF6C5CE7)
-val Cyan = Color(0xFF4FD1E8)
-val TextPrimary = Color(0xFFF2F3F7)
-val TextSecondary = Color(0xFF9AA0AE)
-val Line = Color(0xFF1E222D)
+val Accent = Color(0xFF8B7CFF)   // electric violet/indigo
+val Accent2 = Color(0xFF53D8F0)  // cyan
+val TextPrimary = Color(0xFFF0F4FA)
+val TextSecondary = Color(0xFFB8BECC)
 
-// node-type accents (subtle, restrained)
-val NodeColors = mapOf(
-    "PERSON" to Color(0xFF8B7CFF),
-    "PLACE" to Color(0xFF4FD1E8),
-    "EVENT" to Color(0xFFF2A65A),
-    "TECHNOLOGY" to Color(0xFF6EE7B7),
-    "BOOK" to Color(0xFFF2D06B),
-    "MOVIE" to Color(0xFFFF8FA3),
-    "GAME" to Color(0xFF9D8DFF),
-    "MUSIC" to Color(0xFF7FD1AE),
-    "ORGANIZATION" to Color(0xFF7FB3F5),
-    "CONCEPT" to Color(0xFFC0A9FF),
-)
-
-fun nodeColor(type: String): Color = NodeColors[type.uppercase()] ?: Violet
-
-private val DarkScheme = darkColorScheme(
-    primary = Violet,
-    onPrimary = Color.White,
-    secondary = Cyan,
-    onSecondary = Color.Black,
+private val RabbitHoleDark = darkColorScheme(
+    primary = Accent,
+    secondary = Accent2,
     background = Bg,
-    onBackground = TextPrimary,
     surface = Surface1,
-    onSurface = TextPrimary,
     surfaceVariant = Surface2,
-    onSurfaceVariant = TextSecondary,
-    outline = Line,
-    outlineVariant = Line,
-    error = Color(0xFFF27E7E),
+    onPrimary = Color(0xFF0A0B12),
+    onBackground = TextPrimary,
+    onSurface = TextPrimary,
+    outline = Color(0xFF6E7484),
+    error = Color(0xFFFF6B7A),
 )
 
+private val RabbitHoleLight = lightColorScheme(
+    primary = Color(0xFF5B4BC4),
+    secondary = Color(0xFF00697A),
+)
+
+/** Node type → accent color (used by graph + legend + sheets). */
+fun nodeColor(type: String): Color = when (type.uppercase()) {
+    "PERSON" -> Color(0xFFC792EA)
+    "PLACE" -> Color(0xFF53D8F0)
+    "EVENT" -> Color(0xFFF5A97F)
+    "TECHNOLOGY", "TECH" -> Color(0xFF7FE3A4)
+    "GAME" -> Color(0xFF89AAFF)
+    "MOVIE" -> Color(0xFFF28CA8)
+    "MUSIC" -> Color(0xFF8FD6BD)
+    "ORGANIZATION", "ORG" -> Color(0xFF74A8F5)
+    "BOOK" -> Color(0xFFE5C07B)
+    else -> Color(0xFFA99BF5) // CONCEPT
+}
+
+/**
+ * Material You: on Android 12+ the dark scheme derives from the wallpaper
+ * unless overridden. Falls back to the RabbitHole palette below API 31.
+ */
 @Composable
-fun RabbitHoleTheme(content: @Composable () -> Unit) {
-    // dark-first: always dark (light theme comes in Settings later)
-    MaterialTheme(colorScheme = DarkScheme, content = content)
+fun RabbitHoleTheme(
+    dynamic: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val dark = isSystemInDarkTheme()
+    val context = LocalContext.current
+    val scheme = when {
+        dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        dark -> RabbitHoleDark
+        else -> RabbitHoleLight
+    }
+    MaterialTheme(colorScheme = scheme, content = content)
 }

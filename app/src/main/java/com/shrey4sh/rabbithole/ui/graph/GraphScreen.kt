@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shrey4sh.rabbithole.core.ui.Accent
 import com.shrey4sh.rabbithole.core.ui.Surface1
 import com.shrey4sh.rabbithole.core.ui.nodeColor
 import com.shrey4sh.rabbithole.domain.model.Node
@@ -96,11 +97,21 @@ fun GraphScreen(
                 modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("RABBIT HOLE", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.outline, letterSpacing = 2.sp)
-                if (depth > 0) Text("depth $depth", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary)
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 60.dp)) {
+                // topic is primary; depth secondary
+                val rootTitle = hole.nodes.firstOrNull()?.title ?: "Rabbit Hole"
+                Text(rootTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                if (depth > 0) {
+                    Text("Depth $depth",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Accent, modifier = Modifier.padding(top = 2.dp))
+                }
             }
             IconButton(onClick = { showSearch = !showSearch },
                 modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)) {

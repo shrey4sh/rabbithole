@@ -8,178 +8,284 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import com.shrey4sh.rabbithole.core.ui.Accent
+import com.shrey4sh.rabbithole.core.ui.Surface1
+import com.shrey4sh.rabbithole.core.ui.TextSecondary
+import kotlinx.coroutines.delay
 
-private val EXAMPLES = listOf(
-    "Cyberpunk 2077", "Artificial Intelligence", "Joji", "Black holes", "Delhi", "Formula 1",
+private data class Category(val label: String, val icon: ImageVector)
+
+private val CATEGORIES = listOf(
+    Category("Movies", Icons.Default.Movie),
+    Category("Games", Icons.Default.SportsEsports),
+    Category("Music", Icons.Default.MusicNote),
+    Category("Places", Icons.Default.Public),
+    Category("Science", Icons.Default.Science),
+    Category("People", Icons.Default.Person),
+    Category("Books", Icons.Default.MenuBook),
+    Category("Technology", Icons.Default.Memory),
 )
 
-private val QUICK_START = listOf(
-    "🎬 Movies", "🎮 Games", "🎵 Music", "🌍 Places",
-    "🧠 Science", "👤 People", "💻 Technology", "📚 Books",
+private val EXAMPLES = listOf(
+    "Artificial Intelligence",
+    "Why are black holes black?",
+    "The history of video games",
+    "How did the internet begin?",
+    "Cyberpunk 2077",
+    "The Roman Empire",
+    "Why do we dream?",
+)
+
+private val SUGGESTIONS = listOf(
+    "Why do black holes exist?",
+    "The story of the Internet",
+    "How did video games evolve?",
 )
 
 @Composable
 fun HomeScreen(
     onSearch: (String) -> Unit,
-    onSurpriseMe: () -> Unit,
-    continueExploring: List<Pair<String, String>>,
+    onSurpriseMe: () -> Unit = {},
+    continueExploring: List<com.shrey4sh.rabbithole.data.local.RabbitHoleEntity> = emptyList(),
 ) {
     var query by remember { mutableStateOf("") }
-    var exampleIndex by remember { mutableIntStateOf(0) }
-    val focus = LocalFocusManager.current
+    var exampleIndex by remember { mutableStateOf(0) }
+    val focusRequester = androidx.compose.ui.focus.rememberFocusRequester()
 
+    // open keyboard immediately when Home appears
+    LaunchedEffect(Unit) {
+        delay(300)
+        runCatching { focusRequester.requestFocus() }
+    }
+
+    // rotate examples every 4s with fade
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(2500)
+            delay(4000)
             exampleIndex = (exampleIndex + 1) % EXAMPLES.size
         }
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-    ) {
-        Spacer(Modifier.height(64.dp))
+        modifier = Modifier.fillMaxSize().systemBarsPadding()
+            .verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
 
-        // top row: title + surprise me
-        Row(modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
-            Text("RabbitHole",
-                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.5).sp))
-            IconButton(onClick = onSurpriseMe,
-                modifier = Modifier.size(42.dp).background(Color(0xFF111318), RoundedCornerShape(12.dp))
-                    .border(1.dp, Color(0xFF1E222D), RoundedCornerShape(12.dp))) {
-                Icon(Icons.Default.Shuffle, "Surprise me",
-                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.height(18.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Column {
+                Text("RabbitHole", fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground)
+                Text("Start anywhere. See where it takes you.",
+                    fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 2.dp))
+            }
+            IconButton(onClick = onSurpriseMe, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = "Surprise me",
+                    tint = Accent, modifier = Modifier.size(24.dp))
             }
         }
 
-        Text("Start anywhere. See where it takes you.",
-            style = MaterialTheme.typography.bodyMedium, color = Color(0xFF9AA0AE),
-            modifier = Modifier.padding(top = 4.dp))
+        Spacer(Modifier.height(26.dp))
 
-        Spacer(Modifier.height(34.dp))
-
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("What are you curious about?", color = Color(0xFF6A7080)) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search",
-                tint = Color(0xFF8B7CFF)) },
-            trailingIcon = {
-                if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
-                    Icon(Icons.Default.Clear, "Clear", tint = Color(0xFF6A7080))
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = {
-                if (query.isNotBlank()) { focus.clearFocus(); onSearch(query.trim()) }
-            }),
-            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF8B7CFF),
-                unfocusedBorderColor = Color(0xFF232838),
-                focusedContainerColor = Color(0xFF111318),
-                unfocusedContainerColor = Color(0xFF111318),
-                cursorColor = Color(0xFF8B7CFF),
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(Modifier.height(14.dp))
-        val exAlpha by animateFloatAsState(if (query.isEmpty()) 1f else 0f, tween(400), label = "ex")
-        Box(modifier = Modifier.fillMaxWidth().clickable(enabled = query.isEmpty()) {
-            onSearch(EXAMPLES[exampleIndex])
-        }) {
-            Text("Try “${EXAMPLES[exampleIndex]}”",
-                style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
-                color = Color(0xFF9AA0AE).copy(alpha = exAlpha),
-                modifier = Modifier.padding(start = 6.dp))
-        }
-
-        Spacer(Modifier.height(30.dp))
-        Text("QUICK START", style = MaterialTheme.typography.labelSmall.copy(
-            letterSpacing = 2.sp, color = Color(0xFF9AA0AE)))
-        Spacer(Modifier.height(12.dp))
-
-        QUICK_START.chunked(4).forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { chip ->
-                    Box(modifier = Modifier.weight(1f).height(40.dp)
-                        .background(Color(0xFF111318), RoundedCornerShape(12.dp))
-                        .border(1.dp, Color(0xFF1E222D), RoundedCornerShape(12.dp))
-                        .clickable { onSearch(chip.dropWhile { !it.isLetter() }.trim()) },
-                        contentAlignment = Alignment.Center) {
-                        Text(chip, fontSize = 13.sp)
+        // ---- search field (opens keyboard immediately via focusRequester below) ----
+        var focused by remember { mutableStateOf(false) }
+        Box(modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Surface1)
+            .border(1.dp, if (focused) Accent.copy(alpha = 0.55f) else Color(0xFF23252E),
+                RoundedCornerShape(16.dp))) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Icon(Icons.Default.Search, contentDescription = null,
+                    tint = if (focused) Accent else TextSecondary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.size(12.dp))
+                androidx.compose.material3.BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onBackground),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Accent),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSearch = { if (query.isNotBlank()) onSearch(query.trim()) }),
+                    modifier = Modifier.weight(1f)
+                        .androidx.compose.ui.focus.focusRequester(focusRequester)
+                        .onKeyEvent {
+                            if (it.type == KeyEventType.KeyUp && it.key == Key.Enter &&
+                                query.isNotBlank()) { onSearch(query.trim()); true } else false
+                        },
+                    decorationBox = { inner ->
+                        if (query.isEmpty()) Text("What are you curious about?",
+                            fontSize = 17.sp, color = TextSecondary, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                        inner()
+                    })
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { query = "" }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Close, "Clear", tint = TextSecondary,
+                            modifier = Modifier.size(18.dp))
                     }
                 }
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
 
-        Spacer(Modifier.height(32.dp))
-        Text("CONTINUE EXPLORING", style = MaterialTheme.typography.labelSmall.copy(
-            letterSpacing = 2.sp, color = Color(0xFF9AA0AE)))
+        Spacer(Modifier.height(10.dp))
+
+        // rotating "Try …" with subtle fade
+        AnimatedContent(targetState = exampleIndex, transitionSpec = {
+            fadeIn(tween(500)) togetherWith fadeOut(tween(500))
+        }, label = "example") { idx ->
+            Text("Try \"${EXAMPLES[idx]}\"", fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(start = 4.dp).clickable {
+                    onSearch(EXAMPLES[idx])
+                })
+        }
+
+        Spacer(Modifier.height(26.dp))
+
+        // ---- QUICK START: 4×2 grid of vector-icon cards, no clipping ----
+        Text("QUICK START", fontSize = 11.sp, letterSpacing = 2.sp,
+            color = MaterialTheme.colorScheme.outline)
+        Spacer(Modifier.height(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CATEGORIES.chunked(4).forEach { rowCats ->
+                Row(modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    rowCats.forEach { cat ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f)
+                                .aspectRatio(0.82f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Surface1)
+                                .clickable { onSearch(cat.label) }
+                                .padding(horizontal = 4.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.Center) {
+                            Icon(cat.icon, contentDescription = cat.label,
+                                tint = Accent, modifier = Modifier.size(22.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text(cat.label, fontSize = 11.sp, maxLines = 1,
+                                overflow = TextOverflow.Visible,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                    // pad short rows to keep equal widths
+                    repeat(4 - rowCats.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        // ---- CONTINUE EXPLORING / empty state with suggestions ----
+        Text("CONTINUE EXPLORING", fontSize = 11.sp, letterSpacing = 2.sp,
+            color = MaterialTheme.colorScheme.outline)
         Spacer(Modifier.height(12.dp))
 
         if (continueExploring.isEmpty()) {
             Text("Your rabbit holes will appear here.",
-                style = MaterialTheme.typography.bodySmall, color = Color(0xFF6A7080))
+                fontSize = 13.sp, color = TextSecondary)
+            Spacer(Modifier.height(16.dp))
+            Text("NEED AN IDEA?", fontSize = 11.sp, letterSpacing = 2.sp,
+                color = MaterialTheme.colorScheme.outline)
+            Spacer(Modifier.height(10.dp))
+            SUGGESTIONS.forEach { suggestion ->
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(12.dp)).background(Surface1)
+                    .clickable { onSearch(suggestion) }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Search, contentDescription = null,
+                        tint = TextSecondary, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.size(10.dp))
+                    Text(suggestion, fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
         } else {
-            continueExploring.forEach { (title, sub) ->
-                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)
-                    .background(Color(0xFF111318), RoundedCornerShape(14.dp))
-                    .border(1.dp, Color(0xFF1E222D), RoundedCornerShape(14.dp))
-                    .clickable { onSearch(title) }
-                    .padding(16.dp)) {
-                    Column {
-                        Text(title, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(2.dp))
-                        Text(sub, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9AA0AE))
+            continueExploring.take(5).forEach { hole ->
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(Surface1)
+                    .clickable { onSearch(hole.id.replace("-", " ")) }
+                    .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(hole.id.replace("-", " ").replaceFirstChar { it.uppercase() },
+                            fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${hole.nodeCount} nodes · explored ${formatWhen(hole.updatedAt)}",
+                            fontSize = 11.5.sp, color = MaterialTheme.colorScheme.outline)
                     }
+                    Text("Continue →", fontSize = 12.sp, color = Accent)
                 }
             }
         }
+
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+private fun formatWhen(ts: Long): String {
+    val diff = System.currentTimeMillis() - ts
+    val mins = diff / 60000
+    return when {
+        mins < 60 -> "${mins}m ago"
+        mins < 1440 -> "${mins / 60}h ago"
+        else -> "${mins / 1440}d ago"
     }
 }

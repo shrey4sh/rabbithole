@@ -13,17 +13,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.shrey4sh.rabbithole.core.ui.nodeColor
 import com.shrey4sh.rabbithole.domain.model.Edge
 import com.shrey4sh.rabbithole.domain.model.Node
 import kotlin.math.min
-import androidx.compose.ui.graphics.StrokeCap
 
 /** Simple ring layout computed once per graph. */
 fun computeLayout(
@@ -66,8 +67,8 @@ fun rememberGraphCanvasState(): GraphCanvasState = remember { GraphCanvasState()
 
 /**
  * Interactive graph canvas.
- * Supports: pinch zoom, two-finger pan, single-finger pan, node drag,
- * tap to select, long-press select.
+ * Supports: pinch zoom, pan, node drag, tap to select, long-press select.
+ * Labels are collision-aware and zoom-prioritized.
  */
 @Composable
 fun GraphCanvas(
@@ -81,9 +82,19 @@ fun GraphCanvas(
 ) {
     var canvasSize by remember { mutableStateOf(Offset(1000f, 1600f)) }
     var draggingNodeId by remember { mutableStateOf<String?>(null) }
-    var nodePositions by remember(nodes) { mutableStateOf(computeLayout(nodes, canvasSize.x, canvasSize.y)) }
+    var nodePositions by remember(nodes) {
+        mutableStateOf(computeLayout(nodes, canvasSize.x, canvasSize.y))
+    }
 
     val baseRadius = 26.dp.value
+    val labelPaint = remember {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 15.dp.value
+            textAlign = android.graphics.Paint.Align.CENTER
+            isFakeBoldText = true
+            setShadowLayer(6f, 0f, 0f, android.graphics.Color.BLACK)
+        }
+    }
 
     fun nodeAt(screenPos: Offset): Node? {
         val gp = Offset((screenPos.x - canvasState.offset.x) / canvasState.scale,
@@ -95,7 +106,7 @@ fun GraphCanvas(
         }?.takeIf { n ->
             val p = nodePositions[n.id] ?: return@takeIf false
             val dx = p.x - gp.x; val dy = p.y - gp.y
-            val r = baseRadius * canvasState.scale * 1.6f
+            val r = baseRadius * canvasState.scale * 1.8f
             dx * dx + dy * dy < r * r
         }
     }
@@ -170,27 +181,61 @@ fun GraphCanvas(
                         }
                 val color = nodeColor(n.type.name)
                 val alpha = if (dimmed) 0.25f else 1f
-                val r = if (isSel) nodeRadius * 1.25f else nodeRadius
+                val r = when {
+                    isSel -> nodeRadius * 1.25f
+                    // root emphasis: first node slightly larger + stronger outline
+                    n == nodes.first() -> nodeRadius * 1.15f
+                    else -> nodeRadius
+                }
 
                 if (isSel) drawCircle(color.copy(alpha = 0.18f), r * 1.8f, p)
                 drawCircle(color.copy(alpha = 0.22f * alpha), r, p)
-                drawCircle(color.copy(alpha = alpha), r, p, style = Stroke(2.5f.dp.toPx()))
+                drawCircle(color.copy(alpha = alpha), r, p,
+                    style = Stroke((if (n == nodes.first()) 3.5f else 2.5f).dp.toPx()))
                 drawCircle(color.copy(alpha = alpha), r * 0.45f, p)
 
-                // title under node
+                // title under node — collision-aware placement
                 drawIntoCanvas { cv ->
-                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                        // dark halo behind text for readability on any background
-                        setShadowLayer(6f, 0f, 0f, android.graphics.Color.BLACK)
-                        this.color = android.graphics.Color.argb(
-                            (255 * alpha).toInt(), 240, 244, 250)
-                        textSize = 15.dp.toPx()
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        isFakeBoldText = true
-                    }
                     val label = if (n.title.length > 18) n.title.take(17) + "…" else n.title
-                    cv.nativeCanvas.drawText(
-                        label, p.x, p.y + r + 17.dp.toPx(), paint)
+                    labelPaint.alpha = alpha
+                    labelPaint.textSize = (15 * s.coerceIn(0.7f, 1.6f)).dp.toPx()
+                    val tw = labelPaint.measureText(label)
+                    val th = labelPaint.fontSpacing
+
+                    // candidate positions around node
+                    val candidates = listOf(
+                        p + Offset(0f, r + th),          // below
+                        p + Offset(0f, -(r + th)),       // above
+                        p + Offset(tw/2 + r, 0f),         // right
+                        p + Offset(-(tw/2 + r), 0f),      // left
+                        p + Offset(-(tw/2 + r*0.7f), -(r*0.7f + th)),
+                        p + Offset(tw/2 + r*0.7f, -(r*0.7f + th)),
+                        p + Offset(-(tw/2 + r*0.7f), r*0.7f + th),
+                        p + Offset(tw/2 + r*0.7f, r*0.7f + th),
+                    )
+
+                    var best = candidates[0]
+                    var bestOverlap = Float.MAX_VALUE
+                    candidates.forEach { c ->
+                        val rect = android.graphics.RectF(
+                            c.x - tw/2 - 4f, c.y - th, c.x + tw/2 + 4f, c.y)
+                        var overlap = 0f
+                        nodePositions.forEach { (otherId, otherP) ->
+                            if (otherId != n.id) {
+                                val or_ = nodeRadius
+                                val oc = Offset(otherP.x, otherP.y)
+                                if (rect.contains(oc.x, oc.y)) overlap += 1000f
+                                // check against already-drawn label rects approximated by their node pos
+                                if ((oc - c).getDistance() < th) overlap += 500f
+                            }
+                        }
+                        if (overlap < bestOverlap) {
+                            bestOverlap = overlap
+                            best = c
+                        }
+                    }
+
+                    cv.nativeCanvas.drawText(label, best.x, best.y, labelPaint)
                 }
             }
         }

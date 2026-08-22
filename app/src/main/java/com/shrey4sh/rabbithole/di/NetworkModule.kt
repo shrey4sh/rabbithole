@@ -6,6 +6,7 @@ import com.shrey4sh.rabbithole.data.remote.WikipediaApi
 import com.shrey4sh.rabbithole.data.repository.WikipediaTopicRepository
 import com.shrey4sh.rabbithole.domain.repository.TopicRepository
 import dagger.Module
+import dagger.Binds
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -22,6 +23,11 @@ object NetworkModule {
     @Provides @Singleton
     fun provideAiRanker(): AiRanker = AiRanker(apiKey = BuildConfig.OPENROUTER_API_KEY)
 
-    @Provides @Singleton
-    fun provideTopicRepository(impl: WikipediaTopicRepository): TopicRepository = impl
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class TopicRepositoryModule {
+    @Binds @Singleton
+    abstract fun bindTopicRepository(impl: WikipediaTopicRepository): TopicRepository
 }

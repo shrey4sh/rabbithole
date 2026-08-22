@@ -21,7 +21,7 @@ import javax.inject.Inject
  * Phase 5+6: Wikipedia retrieval + AI ranking, with graceful mock fallback offline.
  * AI reasons over retrieved candidates only — never invents facts.
  */
-class WikipediaTopicRepository constructor(
+class WikipediaTopicRepository @Inject constructor(
     private val wiki: WikipediaApi,
     private val aiRanker: AiRanker,
 ) : TopicRepository {

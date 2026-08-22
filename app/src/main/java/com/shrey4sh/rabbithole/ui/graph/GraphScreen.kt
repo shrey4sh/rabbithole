@@ -191,7 +191,7 @@ private fun NodeSheet(node: Node, hole: RabbitHole) {
         }
 
         Text("CONNECTED TO", style = MaterialTheme.typography.labelSmall,
-            letterSpacing = 2.sp2(), color = MaterialTheme.colorScheme.outline)
+            letterSpacing = 2.sp, color = MaterialTheme.colorScheme.outline)
         Spacer(Modifier.height(8.dp))
         val connected = hole.edges.filter { it.sourceNodeId == node.id || it.targetNodeId == node.id }
         val relTexts = connected.mapNotNull { e ->

@@ -51,7 +51,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             RabbitHoleTheme {
-                val storage = LocalStorageRepository(applicationContext)
+                val db = androidx.room.Room.databaseBuilder(applicationContext,
+                    com.shrey4sh.rabbithole.data.local.RabbitHoleDatabase::class.java,
+                    "rabbithole.db").build()
+                val storage = LocalStorageRepository(db.rabbitHoleDao(), db.savedDao())
                 RootApp(storage)
             }
         }

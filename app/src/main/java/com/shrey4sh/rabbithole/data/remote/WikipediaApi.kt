@@ -41,8 +41,9 @@ class WikipediaApi(
         val url = "$API?action=query&format=json&titles=${enc(title)}" +
                 "&prop=links&pllimit=$limit&plnamespace=0"
         val body = get(url)
-        val pages = json.parseToJsonElement(body).jsonObject["query"]
-            ?.jsonObject?.get("pages")?.jsonObject ?: return emptyList()
+        val root = json.parseToJsonElement(body).jsonObject
+        val pages = (root["query"] as? JsonObject)?.get("pages") as? JsonObject
+            ?: return emptyList()
         return pages.values.flatMap { p ->
             (p as? JsonObject)?.get("links")?.jsonArray?.mapNotNull {
                 (it as? JsonObject)?.get("title")?.jsonPrimitive?.content

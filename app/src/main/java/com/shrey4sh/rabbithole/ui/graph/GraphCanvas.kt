@@ -197,7 +197,7 @@ fun GraphCanvas(
                 // title under node — collision-aware placement
                 drawIntoCanvas { cv ->
                     val label = if (n.title.length > 18) n.title.take(17) + "…" else n.title
-                    labelPaint.alpha = alpha
+                    labelPaint.alpha = (255 * alpha).toInt()
                     labelPaint.textSize = 15.dp.toPx() * s.coerceIn(0.7f, 1.6f)
                     val tw = labelPaint.measureText(label)
                     val th = labelPaint.fontSpacing

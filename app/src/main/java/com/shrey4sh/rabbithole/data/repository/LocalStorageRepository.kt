@@ -1,6 +1,8 @@
 package com.shrey4sh.rabbithole.data.repository
 
 import com.shrey4sh.rabbithole.data.local.RabbitHoleDao
+import com.shrey4sh.rabbithole.data.local.RabbitHoleEntity
+import com.shrey4sh.rabbithole.data.local.SavedItemEntity
 import com.shrey4sh.rabbithole.data.local.SavedDao
 import com.shrey4sh.rabbithole.domain.model.Edge
 import com.shrey4sh.rabbithole.domain.model.Node

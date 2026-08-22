@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "RabbitHole"
-include ":app"
+include(":app")

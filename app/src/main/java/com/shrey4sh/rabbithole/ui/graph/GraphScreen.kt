@@ -152,7 +152,7 @@ private fun GraphNodeSearch(nodes: List<Node>, onSelected: (Node) -> Unit) {
         )
         results.forEach { n ->
             Row(modifier = Modifier.fillMaxWidth()
-                .clickableRow { onSelected(n) }
+                .clickable { onSelected(n) }
                 .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -163,8 +163,7 @@ private fun GraphNodeSearch(nodes: List<Node>, onSelected: (Node) -> Unit) {
     }
 }
 
-private fun Modifier.clickableRow(onClick: () -> Unit): Modifier =
-    this.then(androidx.compose.foundation.clickable { onClick() })
+
 
 @Composable
 private fun NodeSheet(node: Node, hole: RabbitHole) {

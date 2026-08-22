@@ -32,6 +32,10 @@ import com.shrey4sh.rabbithole.ui.graph.GraphUiState
 import com.shrey4sh.rabbithole.ui.graph.GraphViewModel
 import com.shrey4sh.rabbithole.ui.home.HomeScreen
 import com.shrey4sh.rabbithole.ui.placeholder.EmptyScreen
+import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.collectAsState
+import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {

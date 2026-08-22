@@ -21,6 +21,7 @@ import com.shrey4sh.rabbithole.core.ui.nodeColor
 import com.shrey4sh.rabbithole.domain.model.Edge
 import com.shrey4sh.rabbithole.domain.model.Node
 import kotlin.math.min
+import androidx.compose.ui.graphics.StrokeCap
 
 /** Simple ring layout computed once per graph. */
 fun computeLayout(

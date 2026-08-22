@@ -23,6 +23,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shrey4sh.rabbithole.core.ui.TextSecondary
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.sp
 
 private val STAGES = listOf(
     "Finding the main topic…",

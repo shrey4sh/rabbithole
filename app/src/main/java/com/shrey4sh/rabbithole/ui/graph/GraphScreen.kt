@@ -42,6 +42,10 @@ import com.shrey4sh.rabbithole.core.ui.Surface1
 import com.shrey4sh.rabbithole.core.ui.nodeColor
 import com.shrey4sh.rabbithole.domain.model.Node
 import com.shrey4sh.rabbithole.domain.model.RabbitHole
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

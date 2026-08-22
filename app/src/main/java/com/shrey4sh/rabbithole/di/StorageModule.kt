@@ -13,6 +13,11 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object StorageModule {
     @Provides @Singleton
-    fun provideLocalStorage(@ApplicationContext ctx: Context): LocalStorageRepository =
-        LocalStorageRepository(ctx)
+    fun provideLocalStorage(
+        holeDao: com.shrey4sh.rabbithole.data.local.RabbitHoleDao,
+        savedDao: com.shrey4sh.rabbithole.data.local.SavedDao,
+    ): LocalStorageRepository = LocalStorageRepository(holeDao, savedDao)
+
+    @Provides @Singleton
+    fun provideContext(@ApplicationContext ctx: Context): Context = ctx
 }

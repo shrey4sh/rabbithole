@@ -1,12 +1,9 @@
 package com.shrey4sh.rabbithole.data.repository
 
-import android.content.Context
-import com.shrey4sh.rabbithole.data.local.RabbitHoleDatabase
-import com.shrey4sh.rabbithole.data.local.RabbitHoleEntity
-import com.shrey4sh.rabbithole.data.local.SavedItemEntity
+import com.shrey4sh.rabbithole.data.local.RabbitHoleDao
+import com.shrey4sh.rabbithole.data.local.SavedDao
 import com.shrey4sh.rabbithole.domain.model.Edge
 import com.shrey4sh.rabbithole.domain.model.Node
-import com.shrey4sh.rabbithole.domain.model.NodeType
 import com.shrey4sh.rabbithole.domain.model.RabbitHole
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.encodeToString
@@ -14,11 +11,10 @@ import kotlinx.serialization.json.Json
 
 private val json = Json { ignoreUnknownKeys = true }
 
-class LocalStorageRepository(context: Context) {
-
-    private val db = RabbitHoleDatabase.get(context)
-    private val holeDao = db.rabbitHoleDao()
-    private val savedDao = db.savedDao()
+class LocalStorageRepository(
+    private val holeDao: RabbitHoleDao,
+    private val savedDao: SavedDao,
+) {
 
     // ---- rabbit holes ----
 
@@ -49,6 +45,8 @@ class LocalStorageRepository(context: Context) {
         )
     }
 
+    suspend fun deleteHole(id: String) = holeDao.delete(id)
+
     // ---- saved items ----
 
     fun savedItems(): Flow<List<SavedItemEntity>> = savedDao.all()
@@ -62,6 +60,12 @@ class LocalStorageRepository(context: Context) {
             subtitle = node.description.take(80),
             type = node.type.name,
             savedAt = System.currentTimeMillis()))
+    }
+
+    suspend fun saveItem(id: String, title: String, subtitle: String, type: String) {
+        savedDao.upsert(SavedItemEntity(
+            id = id, kind = "ITEM", title = title, subtitle = subtitle,
+            type = type, savedAt = System.currentTimeMillis()))
     }
 
     suspend fun unsave(id: String) = savedDao.delete(id)

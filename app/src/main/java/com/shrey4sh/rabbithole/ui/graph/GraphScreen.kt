@@ -37,9 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.shrey4sh.rabbithole.core.ui.Surface1
 import com.shrey4sh.rabbithole.core.ui.nodeColor
-import com.shrey4sh.rabbithole.domain.model.Launch
 import com.shrey4sh.rabbithole.domain.model.Node
 import com.shrey4sh.rabbithole.domain.model.RabbitHole
 
@@ -77,7 +77,7 @@ fun GraphScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
             }
             Text("RABBIT HOLE", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.outline, letterSpacing = 2.sp2())
+                color = MaterialTheme.colorScheme.outline, letterSpacing = 2.sp)
             IconButton(onClick = { showSearch = !showSearch },
                 modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)) {
                 Icon(Icons.Default.Search, "Search in graph")
@@ -126,8 +126,6 @@ fun GraphScreen(
         }
     }
 }
-
-private fun Int.sp2() = androidx.compose.ui.unit.sp
 
 @Composable
 private fun GraphNodeSearch(nodes: List<Node>, onSelected: (Node) -> Unit) {
@@ -184,7 +182,7 @@ private fun NodeSheet(node: Node, hole: RabbitHole) {
 
         Spacer(Modifier.height(14.dp))
         if (node.description.isNotEmpty()) {
-            Text(node.description, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp2()))
+            Text(node.description, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp))
             Spacer(Modifier.height(16.dp))
         }
 

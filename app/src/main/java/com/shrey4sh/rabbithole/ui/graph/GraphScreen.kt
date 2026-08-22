@@ -52,23 +52,39 @@ import androidx.compose.material3.TextField
 fun GraphScreen(
     hole: RabbitHole,
     onBack: () -> Unit,
+    onTakeMeDeeper: (String) -> Unit = {},
+    path: List<PathEntry> = emptyList(),
+    onJumpBack: (String) -> Unit = {},
+    depth: Int = 0,
+    expanding: Boolean = false,
 ) {
     val state = rememberGraphCanvasState()
     var selectedId by remember { mutableStateOf<String?>(null) }
     var showSearch by remember { mutableStateOf(false) }
+    var showPath by remember { mutableStateOf(false) }
+    var showPath by remember { mutableStateOf(false) }
 
     val selected = hole.nodes.find { it.id == selectedId }
 
     Box(Modifier.fillMaxSize()) {
-        GraphCanvas(
-            nodes = hole.nodes,
-            edges = hole.edges,
-            selectedId = selectedId,
-            onNodeTap = { selectedId = if (selectedId == it.id) null else it.id },
-            onNodeLongPress = { selectedId = it.id },
-            modifier = Modifier.fillMaxSize(),
-            canvasState = state,
-        )
+        Box(Modifier.fillMaxSize()) {
+            GraphCanvas(
+                nodes = hole.nodes,
+                edges = hole.edges,
+                selectedId = selectedId,
+                onNodeTap = { selectedId = if (selectedId == it.id) null else it.id },
+                onNodeLongPress = { selectedId = it.id },
+                modifier = Modifier.fillMaxSize(),
+                canvasState = state,
+            )
+            if (expanding) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center) {
+                    Text("🐇 going deeper…", style = MaterialTheme.typography.labelLarge,
+                        letterSpacing = 2.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
 
         // top bar
         Row(
@@ -80,8 +96,12 @@ fun GraphScreen(
                 modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
             }
-            Text("RABBIT HOLE", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.outline, letterSpacing = 2.sp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("RABBIT HOLE", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline, letterSpacing = 2.sp)
+                if (depth > 0) Text("depth $depth", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary)
+            }
             IconButton(onClick = { showSearch = !showSearch },
                 modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface)) {
                 Icon(Icons.Default.Search, "Search in graph")
@@ -118,6 +138,38 @@ fun GraphScreen(
         // legend (bottom-left, compact)
         Legend(Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 20.dp))
 
+        // how-did-i-get-here floating button (top-right under search)
+        if (path.size > 1) {
+            FloatingActionButton(
+                onClick = { showPath = true },
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 68.dp, end = 14.dp)
+                    .size(42.dp),
+                containerColor = MaterialTheme.colorScheme.surface) {
+                Text("🧭", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+
+        // exploration path overlay
+        if (showPath) {
+            PathOverlay(path, onJumpBack = { id ->
+                onJumpBack(id); selectedId = null; showPath = false
+            }, onDismiss = { showPath = false })
+        }
+
+        // rabbit hole "keep going?" bar
+        if (selected != null && !expanding) {
+            Row(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color.Black.copy(alpha = 0.65f)).padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Keep going?", color = Color(0xFFB8BECC), fontSize = 13.sp)
+                androidx.compose.material3.FilledTonalButton(onClick = {
+                    onTakeMeDeeper(selected.id)
+                }) { Text("🐇 TAKE ME DEEPER", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+
         // node bottom sheet
         selected?.let { sel ->
             ModalBottomSheet(
@@ -125,7 +177,7 @@ fun GraphScreen(
                 containerColor = Surface1,
                 shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
             ) {
-                NodeSheet(sel, hole)
+                NodeSheet(sel, hole, onTakeMeDeeper)
             }
         }
     }
@@ -166,7 +218,7 @@ private fun GraphNodeSearch(nodes: List<Node>, onSelected: (Node) -> Unit) {
 
 
 @Composable
-private fun NodeSheet(node: Node, hole: RabbitHole) {
+private fun NodeSheet(node: Node, hole: RabbitHole, onTakeMeDeeper: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
         // type chip + image circle
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -208,7 +260,8 @@ private fun NodeSheet(node: Node, hole: RabbitHole) {
         // actions
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             androidx.compose.material3.Button(
-                onClick = {}, modifier = Modifier.weight(1f)) { Text("EXPLORE DEEPER") }
+                onClick = { onTakeMeDeeper(node.id) }, modifier = Modifier.weight(1f)) {
+                Text("🐇 TAKE ME DEEPER") }
             androidx.compose.material3.OutlinedButton(
                 onClick = {}, modifier = Modifier.weight(1f)) { Text("VIEW SOURCES") }
         }

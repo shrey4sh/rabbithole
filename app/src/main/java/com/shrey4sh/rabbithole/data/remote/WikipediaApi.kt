@@ -60,8 +60,8 @@ class WikipediaApi(
     private fun get(url: String): String {
         val req = okhttp3.Request.Builder().url(url).build()
         client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw okhttp3.HttpException(resp)
-            return resp.body!!.string()
+            if (!resp.isSuccessful) throw RuntimeException("HTTP ${resp.code}")
+            return resp.body?.string() ?: ""
         }
     }
 

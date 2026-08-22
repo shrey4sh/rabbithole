@@ -4,7 +4,6 @@ import android.content.Context
 import com.shrey4sh.rabbithole.data.local.RabbitHoleDao
 import com.shrey4sh.rabbithole.data.local.RabbitHoleDatabase
 import com.shrey4sh.rabbithole.data.local.SavedDao
-import com.shrey4sh.rabbithole.data.local.buildDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,7 +16,7 @@ import javax.inject.Singleton
 object DatabaseModule {
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): RabbitHoleDatabase =
-        buildDatabase(ctx)
+        androidx.room.Room.databaseBuilder(ctx, RabbitHoleDatabase::class.java, "rabbithole.db").build()
 
     @Provides fun provideHoleDao(db: RabbitHoleDatabase): RabbitHoleDao = db.rabbitHoleDao()
 

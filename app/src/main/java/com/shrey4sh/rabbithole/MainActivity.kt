@@ -40,6 +40,9 @@ import com.shrey4sh.rabbithole.ui.history.HistoryScreen
 import com.shrey4sh.rabbithole.ui.home.HomeScreen
 import com.shrey4sh.rabbithole.ui.placeholder.EmptyScreen
 import com.shrey4sh.rabbithole.ui.saved.SavedScreen
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.Text
+import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -110,7 +113,7 @@ fun RootApp(storage: LocalStorageRepository) {
                     onBack = { nav.popBackStack() },
                     loadingTopic = query,
                     onShare = { hole ->
-                        val pathText = hole.explorationPath.joinToString(" ↓ ") { it.title }
+                        val pathText = hole.explorationPath.joinToString(" ↓ ") { p -> p.title }
                         val intent = Intent().apply {
                             action = Intent.ACTION_SEND
                             type = "text/plain"

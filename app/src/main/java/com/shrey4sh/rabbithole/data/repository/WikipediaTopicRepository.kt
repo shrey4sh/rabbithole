@@ -67,8 +67,8 @@ class WikipediaTopicRepository @Inject constructor(
         val rootNode = Node(
             id = rootId,
             title = rootPage.title,
-            description = rootPage.description ?: summary?.extract?.take(200) ?: "",
-            type = NodeType.CONCEPT,
+            description = rootPage.description ?: "",
+            type = guessType(rootPage.title, summary?.extract?.take(400) ?: rootPage.description),
             imageUrl = rootPage.thumbnail?.source,
             sourceUrls = listOf(wikiUrl(rootPage.title)),
         )
@@ -82,7 +82,7 @@ class WikipediaTopicRepository @Inject constructor(
                         id = "wiki:${r.title.hashCode()}",
                         title = r.title,
                         description = s?.extract?.take(160) ?: r.reason,
-                        type = guessType(r.title),
+                        type = guessType(r.title, s?.extract?.take(200)),
                         imageUrl = s?.thumbnail?.source,
                         sourceUrls = listOf(wikiUrl(r.title)),
                     )
@@ -114,13 +114,38 @@ class WikipediaTopicRepository @Inject constructor(
     private fun wikiUrl(title: String) =
         "https://en.wikipedia.org/wiki/${java.net.URLEncoder.encode(title.replace(' ', '_'), "UTF-8")}"
 
-    private fun guessType(title: String): NodeType {
-        val t = title.lowercase()
+    private fun guessType(title: String, description: String? = null): NodeType {
+        val text = (title + " " + (description ?: "")).lowercase()
         return when {
-            listOf("university", "city", "river", "mountain", "park", "airport", "fort", "temple").any { t.contains(it) } -> NodeType.PLACE
-            listOf("war", "treaty", "revolution", "empire", "battle", "cup").any { t.contains(it) } -> NodeType.EVENT
-            listOf("software", "engine", "system", "network", "telescope", "machine").any { t.contains(it) } -> NodeType.TECHNOLOGY
-            listOf("band", "singer", "album").any { t.contains(it) } -> NodeType.MUSIC
+            // people: occupations & roles
+            listOf("singer", "actor", "actress", "writer", "author", "musician", "footballer",
+                   "politician", "scientist", "physicist", "composer", "director", "producer",
+                   "artist", "poet", "novelist", "engineer who", "philosopher", "emperor",
+                   "king of", "queen", "president", "prime minister", "born 19", "born 18").any { it in text } -> NodeType.PERSON
+            // places
+            listOf("city", "town", "village", "district", "country", "state in india",
+                   "river", "mountain", "park", "airport", "fort", "temple", "stadium",
+                   "capital", "province", "region", "island", "neighbourhood").any { it in text } -> NodeType.PLACE
+            // events
+            listOf("war", "battle", "treaty", "revolution", "massacre", "uprising",
+                   "tournament", "championship", "ceremony", "protest", "attack", "expedition").any { it in text } -> NodeType.EVENT
+            // games
+            listOf("video game", "game developed", "rpg", "action-adventure game",
+                   "platform game", "shooter game", "gaming").any { it in text } -> NodeType.GAME
+            // movies
+            listOf("film", "movie", "directed by", "cinematic").any { it in text } -> NodeType.MOVIE
+            // music
+            listOf("song", "album", "single by", "band", "singer-songwriter", "record producer",
+                   "soundtrack").any { it in text } -> NodeType.MUSIC
+            // organizations
+            listOf("company", "studio", "corporation", "organization", "agency", "label",
+                   "founded in", "developer of").any { it in text } -> NodeType.ORGANIZATION
+            // tech
+            listOf("software", "operating system", "network", "internet", "computer",
+                   "machine", "engine", "application", "programming", "artificial intelligence",
+                   "algorithm", "cryptocurrency", "website").any { it in text } -> NodeType.TECHNOLOGY
+            // books
+            listOf("novel", "book", "trilogy", "memoir", "written by").any { it in text } -> NodeType.BOOK
             else -> NodeType.CONCEPT
         }
     }

@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
@@ -174,6 +176,19 @@ fun GraphCanvas(
                 drawCircle(color.copy(alpha = 0.22f * alpha), r, p)
                 drawCircle(color.copy(alpha = alpha), r, p, style = Stroke(2.5f.dp.toPx()))
                 drawCircle(color.copy(alpha = alpha), r * 0.45f, p)
+
+                // title under node
+                drawIntoCanvas { cv ->
+                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                        this.color = android.graphics.Color.argb(
+                            (255 * alpha).toInt(), 222, 228, 238)
+                        textSize = 13.dp.toPx() / 1f
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isFakeBoldText = isSel
+                    }
+                    cv.nativeCanvas.drawText(
+                        n.title, p.x, p.y + r + 16.dp.toPx(), paint)
+                }
             }
         }
     }

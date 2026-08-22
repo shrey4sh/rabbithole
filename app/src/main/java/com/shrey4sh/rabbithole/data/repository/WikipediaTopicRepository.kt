@@ -15,12 +15,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import javax.inject.Inject
 
 /**
  * Phase 5+6: Wikipedia retrieval + AI ranking, with graceful mock fallback offline.
  * AI reasons over retrieved candidates only — never invents facts.
  */
-class WikipediaTopicRepository @Inject constructor(
+class WikipediaTopicRepository constructor(
     private val wiki: WikipediaApi,
     private val aiRanker: AiRanker,
 ) : TopicRepository {

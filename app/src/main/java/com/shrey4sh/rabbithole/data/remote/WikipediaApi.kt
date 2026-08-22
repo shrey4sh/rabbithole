@@ -67,8 +67,8 @@ class WikipediaApi(
     }
 
     private fun parsePages(body: String): List<WikiPage> =
-        json.decodeFromString<WikiSearchResponse>(body).query?.pages.values.orEmpty()
-            .sortedBy { it.index ?: 999 }
+        json.decodeFromString<WikiSearchResponse>(body).query
+            ?.pages?.values.orEmpty().sortedBy { it.index ?: 999 }
 
     private fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
 }

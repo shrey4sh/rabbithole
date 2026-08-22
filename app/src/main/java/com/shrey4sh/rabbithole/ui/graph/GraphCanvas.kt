@@ -198,7 +198,7 @@ fun GraphCanvas(
                 drawIntoCanvas { cv ->
                     val label = if (n.title.length > 18) n.title.take(17) + "…" else n.title
                     labelPaint.alpha = alpha
-                    labelPaint.textSize = (15 * s.coerceIn(0.7f, 1.6f)).dp.toPx()
+                    labelPaint.textSize = 15.dp.toPx() * s.coerceIn(0.7f, 1.6f)
                     val tw = labelPaint.measureText(label)
                     val th = labelPaint.fontSpacing
 

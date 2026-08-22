@@ -64,6 +64,15 @@ import com.shrey4sh.rabbithole.core.ui.Accent
 import com.shrey4sh.rabbithole.core.ui.Surface1
 import com.shrey4sh.rabbithole.core.ui.TextSecondary
 import kotlinx.coroutines.delay
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 
 private data class Category(val label: String, val icon: ImageVector)
 
@@ -102,7 +111,7 @@ fun HomeScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var exampleIndex by remember { mutableStateOf(0) }
-    val focusRequester = androidx.compose.ui.focus.rememberFocusRequester()
+    val focusRequester = FocusRequester()
 
     // open keyboard immediately when Home appears
     LaunchedEffect(Unit) {
@@ -151,19 +160,18 @@ fun HomeScreen(
                 Icon(Icons.Default.Search, contentDescription = null,
                     tint = if (focused) Accent else TextSecondary, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.size(12.dp))
-                androidx.compose.material3.BasicTextField(
+                BasicTextField(
                     value = query,
                     onValueChange = { query = it },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onBackground),
                     cursorBrush = androidx.compose.ui.graphics.SolidColor(Accent),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
                         onSearch = { if (query.isNotBlank()) onSearch(query.trim()) }),
                     modifier = Modifier.weight(1f)
-                        .androidx.compose.ui.focus.focusRequester(focusRequester)
+                        .focusRequester(focusRequester)
                         .onKeyEvent {
                             if (it.type == KeyEventType.KeyUp && it.key == Key.Enter &&
                                 query.isNotBlank()) { onSearch(query.trim()); true } else false

@@ -57,6 +57,7 @@ fun GraphScreen(
     onJumpBack: (String) -> Unit = {},
     depth: Int = 0,
     expanding: Boolean = false,
+    onShare: () -> Unit = {},
 ) {
     val state = rememberGraphCanvasState()
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -176,7 +177,7 @@ fun GraphScreen(
                 containerColor = Surface1,
                 shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
             ) {
-                NodeSheet(sel, hole, onTakeMeDeeper)
+                NodeSheet(sel, hole, onTakeMeDeeper, onShare)
             }
         }
     }
@@ -217,7 +218,7 @@ private fun GraphNodeSearch(nodes: List<Node>, onSelected: (Node) -> Unit) {
 
 
 @Composable
-private fun NodeSheet(node: Node, hole: RabbitHole, onTakeMeDeeper: (String) -> Unit) {
+private fun NodeSheet(node: Node, hole: RabbitHole, onTakeMeDeeper: (String) -> Unit, onShare: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
         // type chip + image circle
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -269,7 +270,7 @@ private fun NodeSheet(node: Node, hole: RabbitHole, onTakeMeDeeper: (String) -> 
             androidx.compose.material3.OutlinedButton(
                 onClick = {}, modifier = Modifier.weight(1f)) { Text("SAVE") }
             androidx.compose.material3.OutlinedButton(
-                onClick = {}, modifier = Modifier.weight(1f)) { Text("SHARE") }
+                onClick = onShare, modifier = Modifier.weight(1f)) { Text("SHARE") }
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.shrey4sh.rabbithole
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,26 +18,28 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.shrey4sh.rabbithole.core.ui.RabbitHoleTheme
+import com.shrey4sh.rabbithole.data.repository.LocalStorageRepository
+import com.shrey4sh.rabbithole.domain.model.RabbitHole
 import com.shrey4sh.rabbithole.ui.discovery.DiscoveryLoadingScreen
 import com.shrey4sh.rabbithole.ui.graph.GraphScreen
 import com.shrey4sh.rabbithole.ui.graph.GraphUiState
 import com.shrey4sh.rabbithole.ui.graph.GraphViewModel
+import com.shrey4sh.rabbithole.ui.history.HistoryScreen
 import com.shrey4sh.rabbithole.ui.home.HomeScreen
 import com.shrey4sh.rabbithole.ui.placeholder.EmptyScreen
-import androidx.compose.material3.Text
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.runtime.collectAsState
-import dagger.hilt.android.AndroidEntryPoint
+import com.shrey4sh.rabbithole.ui.saved.SavedScreen
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -44,7 +47,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            RabbitHoleTheme { RootApp() }
+            RabbitHoleTheme {
+                val storage = LocalStorageRepository(applicationContext)
+                RootApp(storage)
+            }
         }
     }
 }
@@ -52,8 +58,9 @@ class MainActivity : ComponentActivity() {
 private data class Tab(val route: String, val label: String, val icon: @Composable () -> Unit)
 
 @Composable
-fun RootApp() {
+fun RootApp(storage: LocalStorageRepository) {
     val nav = rememberNavController()
+    val context = LocalContext.current
     val tabs = listOf(
         Tab("home", "Home") { Icon(Icons.Default.Home, null) },
         Tab("explore", "Explore") { Icon(Icons.Default.Explore, null) },
@@ -96,24 +103,57 @@ fun RootApp() {
             composable("discovery/{query}") { entry ->
                 val query = java.net.URLDecoder.decode(entry.arguments?.getString("query") ?: "", "UTF-8")
                 val vm: GraphViewModel = hiltViewModel()
-                androidx.compose.runtime.LaunchedEffect(query) {
+                LaunchedEffect(query) {
                     if (query == "@random") vm.surpriseMe() else vm.search(query)
                 }
-                GraphRoute(vm, onBack = { nav.popBackStack() }, loadingTopic = query)
+                GraphRoute(vm, storage = storage,
+                    onBack = { nav.popBackStack() },
+                    loadingTopic = query,
+                    onShare = { hole ->
+                        val pathText = hole.explorationPath.joinToString(" ↓ ") { it.title }
+                        val intent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT,
+                                "RABBIT HOLE\n${hole.id.replace("-", " ").replaceFirstChar { it.uppercase() }}\n\n$pathText\n\nExplored with RabbitHole")
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share rabbit hole"))
+                    })
             }
             composable("explore") { EmptyScreen("Explore", "Discover trending rabbit holes — coming soon.") }
-            composable("saved") { EmptyScreen("Nothing saved yet.", "Follow something interesting and save it here.") }
-            composable("history") { EmptyScreen("Your rabbit holes will appear here.", "") }
+            composable("saved") { SavedScreen(onOpenHole = {}) }
+            composable("history") { HistoryScreen(onOpenHole = { hole ->
+                // restore graph exactly where left off
+                nav.navigate("discovery/restore:${hole.id}")
+            }) }
             composable("settings") { EmptyScreen("Settings", "Appearance, graph behavior, data & privacy.") }
         }
     }
 }
 
 @Composable
-private fun GraphRoute(vm: GraphViewModel, onBack: () -> Unit, loadingTopic: String) {
+private fun GraphRoute(
+    vm: GraphViewModel,
+    storage: LocalStorageRepository,
+    onBack: () -> Unit,
+    loadingTopic: String,
+    onShare: (RabbitHole) -> Unit,
+) {
     when (val s = vm.state.collectAsState().value) {
         is GraphUiState.Loading -> DiscoveryLoadingScreen(loadingTopic)
-        is GraphUiState.Ready -> GraphScreen(hole = s.hole, onBack = onBack)
+        is GraphUiState.Ready -> {
+            // auto-save every discovered hole to history
+            LaunchedEffect(s.hole.id) { storage.saveHole(s.hole) }
+            GraphScreen(
+                hole = s.hole, onBack = onBack,
+                onTakeMeDeeper = { nodeId -> vm.takeMeDeeper(s.hole, nodeId) },
+                path = vm.path.collectAsState().value,
+                onJumpBack = { vm.jumpBackTo(it) },
+                depth = vm.depth.collectAsState().value,
+                expanding = vm.expanding.collectAsState().value,
+                onShare = onShare,
+            )
+        }
         is GraphUiState.Empty -> EmptyScreen(
             "We couldn't find much on that topic.", "Try something more specific.")
         is GraphUiState.Error -> EmptyScreen(

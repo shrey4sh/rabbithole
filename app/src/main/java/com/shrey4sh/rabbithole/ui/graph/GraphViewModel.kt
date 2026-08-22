@@ -22,8 +22,6 @@ sealed interface GraphUiState {
     data class Error(val message: String) : GraphUiState
 }
 
-data class PathEntry(val nodeId: String, val title: String, val via: String?)
-
 @HiltViewModel
 class GraphViewModel @Inject constructor(
     private val repo: TopicRepository,

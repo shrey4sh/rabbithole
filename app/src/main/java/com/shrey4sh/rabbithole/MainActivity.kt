@@ -132,7 +132,12 @@ fun RootApp(storage: LocalStorageRepository) {
                 // restore graph exactly where left off
                 nav.navigate("discovery/restore:${hole.id}")
             }) }
-            composable("settings") { EmptyScreen("Settings", "Appearance, graph behavior, data & privacy.") }
+            composable("settings") {
+                com.shrey4sh.rabbithole.ui.settings.SettingsScreen(
+                    onClearHistory = { /* Room delete-all — Phase 7 */ },
+                    onClearCache = { },
+                )
+            }
         }
     }
 }

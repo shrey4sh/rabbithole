@@ -113,7 +113,7 @@ fun RootApp(storage: LocalStorageRepository) {
                     onBack = { nav.popBackStack() },
                     loadingTopic = query,
                     onShare = { hole ->
-                        val pathText = hole.explorationPath.joinToString(" ↓ ") { p -> p.title }
+                        val pathText = hole.explorationPath.joinToString(" ↓ ")
                         val intent = Intent().apply {
                             action = Intent.ACTION_SEND
                             type = "text/plain"

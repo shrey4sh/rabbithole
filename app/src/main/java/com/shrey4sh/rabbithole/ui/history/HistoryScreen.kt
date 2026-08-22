@@ -36,6 +36,7 @@ import javax.inject.Inject
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(

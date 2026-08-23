@@ -60,7 +60,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
-import com.shrey4sh.rabbithole.core.ui.Accent
 import com.shrey4sh.rabbithole.core.ui.Surface1
 import com.shrey4sh.rabbithole.core.ui.TextSecondary
 import kotlinx.coroutines.delay
@@ -142,7 +141,7 @@ fun HomeScreen(
             }
             IconButton(onClick = onSurpriseMe, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Default.AutoAwesome, contentDescription = "Surprise me",
-                    tint = Accent, modifier = Modifier.size(24.dp))
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
             }
         }
 
@@ -153,12 +152,12 @@ fun HomeScreen(
         Box(modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Surface1)
-            .border(1.dp, if (focused) Accent.copy(alpha = 0.55f) else Color(0xFF23252E),
+            .border(1.dp, if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outlineVariant,
                 RoundedCornerShape(16.dp))) {
             Row(verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                 Icon(Icons.Default.Search, contentDescription = null,
-                    tint = if (focused) Accent else TextSecondary, modifier = Modifier.size(22.dp))
+                    tint = if (focused) MaterialTheme.colorScheme.primary else TextSecondary, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.size(12.dp))
                 BasicTextField(
                     value = query,
@@ -166,7 +165,7 @@ fun HomeScreen(
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onBackground),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Accent),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(
                         onSearch = { if (query.isNotBlank()) onSearch(query.trim()) }),
@@ -224,7 +223,7 @@ fun HomeScreen(
                                 .padding(horizontal = 4.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.Center) {
                             Icon(cat.icon, contentDescription = cat.label,
-                                tint = Accent, modifier = Modifier.size(22.dp))
+                                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                             Spacer(Modifier.height(8.dp))
                             Text(cat.label, fontSize = 11.sp, maxLines = 1,
                                 overflow = TextOverflow.Visible,
@@ -279,7 +278,7 @@ fun HomeScreen(
                         Text("${hole.nodeCount} nodes · explored ${formatWhen(hole.updatedAt)}",
                             fontSize = 11.5.sp, color = MaterialTheme.colorScheme.outline)
                     }
-                    Text("Continue →", fontSize = 12.sp, color = Accent)
+                    Text("Continue →", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

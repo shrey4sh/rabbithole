@@ -83,7 +83,7 @@ fun SettingsScreen(
         ToggleRow("Analytics", "Share anonymous usage data", analytics) { analytics = it }
 
         Spacer(Modifier.height(20.dp))
-        HorizontalDivider(color = Color(0xFF1E222D))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         SettingHeader("About")
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),

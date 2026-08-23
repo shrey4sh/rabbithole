@@ -32,7 +32,7 @@ data class PathEntry(val nodeId: String, val title: String, val via: String?)
 fun PathOverlay(path: List<PathEntry>, onJumpBack: (String) -> Unit, onDismiss: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(16.dp)
         .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
-        .background(Color(0xEE111318)).clickable { onDismiss() }
+        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.93f)).clickable { onDismiss() }
         .padding(22.dp)) {
 
         // dim whole overlay tap = dismiss; inner column stops propagation by consuming clicks

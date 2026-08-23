@@ -81,7 +81,7 @@ fun RootApp(storage: LocalStorageRepository) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (showBar) NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF111318)) {
+            if (showBar) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 tabs.forEach { tab ->
                     NavigationBarItem(
                         selected = current == tab.route,

@@ -53,10 +53,13 @@ class AiRanker(
                 "For each candidate classify the relationship to the root using ONE of: " +
                 "CREATED_BY, INSPIRED_BY, LOCATED_IN, MEMBER_OF, INFLUENCED, SAME_GENRE, " +
                 "OCCURRED_IN, WORKED_ON, BASED_ON, RELATED_TO.\n" +
-                "Rules: pick the 8-12 STRONGEST and most DIVERSE connections (mix people, works, " +
-                "concepts, places where possible). Skip obscure or weakly related entries. " +
-                "Every connection must be a well-known, defensible relationship. " +
-                "Respond ONLY with JSON array: " +
+                "Rules: pick ONLY the 8-10 STRONGEST and most DIVERSE connections (mix people, works, " +
+                "concepts, places where possible). A candidate qualifies only if it has a strong, " +
+                "obvious relationship to the root (e.g. inventor, founder, defining work, parent " +
+                "genre, key technology, major manufacturer). EXCLUDE weak or incidental links: " +
+                "shared vocabulary, tangential mentions, niche subtopics, generic pages. " +
+                "Every connection must be a well-known, defensible relationship a curious person " +
+                "would immediately recognize. Respond ONLY with JSON array: " +
                 """[{"title":"<exact title>","relationship":"<LABEL>","reason":"<max 15 words>"}]"""
 
         return runCatching {

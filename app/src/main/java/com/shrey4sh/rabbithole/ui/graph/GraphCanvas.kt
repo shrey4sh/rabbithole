@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -87,6 +88,13 @@ fun GraphCanvas(
     }
 
     val baseRadius = 26.dp.value
+    // Material You derived colors (fall back to neutral values pre-S / in canvas scope)
+    val m3 = MaterialTheme.colorScheme
+    val edgeDefault = m3.outlineVariant.copy(alpha = 0.55f)
+    val edgeSelected = m3.primary.copy(alpha = 0.55f)
+    val edgeDimmed = m3.outlineVariant.copy(alpha = 0.18f)
+    val rootColor = m3.primary
+    val selectedColor = m3.primary
     // Light readable label colors (dark theme)
     val labelColorPrimary = android.graphics.Color.parseColor("#F2F0F5")
     val labelColorSecondary = android.graphics.Color.parseColor("#C8C4D0")
@@ -125,11 +133,10 @@ fun GraphCanvas(
         else -> 3 + nodes.indexOf(n) % 8 // stable tie-break
     }
 
-    /** Zoom-driven label budget: fewer labels when zoomed out, more when zoomed in. */
+    /** Zoom-driven label budget: labels hide ONLY when genuinely crowded. */
     fun maxVisibleLabels(scale: Float): Int = when {
-        scale < 0.55f -> 7
-        scale < 0.8f -> 11
-        scale < 1.3f -> 16
+        scale < 0.55f -> maxOf(10, (nodes.size * 0.7f).toInt())
+        scale < 0.8f -> maxOf(14, (nodes.size * 0.85f).toInt())
         else -> nodes.size
     }
 
@@ -200,15 +207,18 @@ fun GraphCanvas(
         val budget = maxVisibleLabels(canvasState.scale)
         for (n in drawOrder) {
             val p = nodePositions[n.id] ?: continue
-            if (shown >= budget) break
+            val prio = labelPriority(n)
+            if (!(prio <= 2) && shown >= budget) continue
 
             val isSel = n.id == selectedId
-            val dimmed = selectedId != null && !isSel &&
-                    edges.none {
+            val isNeighborOfSel = selectedId != null &&
+                    edges.any {
                         (it.sourceNodeId == selectedId && it.targetNodeId == n.id) ||
                         (it.targetNodeId == selectedId && it.sourceNodeId == n.id)
                     }
-            if (dimmed && !isSel) continue // never label unrelated/dimmed nodes when something is selected
+            // Priority 0-2 (root, selected, direct neighbors) ALWAYS get labels —
+            // never dropped by budget or dimming. Only low-priority labels may hide.
+            fun mustShow(): Boolean = prio <= 2
 
             // progressive shortening: try longer text first, shorten only under pressure
             val maxLen = when (labelPriority(n)) {
@@ -268,14 +278,23 @@ fun GraphCanvas(
                 if (score < bestScore) { bestScore = score; best = Placement(n.id, cand, rect) }
             }
 
-            // still no spot? progressively shorten and retry once
-            if (best == null && labelText.length > 8) {
-                labelText = shorten(n.title.replace(Regex("\\s*\\(.*?\\)$"), ""), maxLen - 4)
-                val c = p + Offset(0f, r + th)
-                val rect = rectFor(c)
-                if (placed.none { rect.intersects(it.rect) } &&
-                    rect.right <= screenW - 8f && rect.left >= 8f) {
-                    best = Placement(n.id, c, rect)
+            // still no spot? progressively shorten and retry — must-show labels
+            // get an extra shortened attempt so important nodes never go unlabeled
+            if (best == null) {
+                val base = n.title.replace(Regex("\\s*\\(.*?\\)$"), "")
+                for (len in listOf(maxLen - 4, 8)) {
+                    if (base.length <= len && best != null) break
+                    labelText = shorten(base, len)
+                    // re-evaluate all candidate positions with the shorter text
+                    for (cand in candidates) {
+                        val rect = rectFor(cand)
+                        if (placed.any { it.rect.intersects(rect) }) continue
+                        if (rect.right > screenW - 8f || rect.left < 8f ||
+                            rect.top < 90f / s2 || rect.bottom > screenH - 120f / s2) continue
+                        best = Placement(n.id, cand, rect)
+                        break
+                    }
+                    if (best != null || base.length <= len) break
                 }
             }
 
@@ -295,9 +314,9 @@ fun GraphCanvas(
                             e.sourceNodeId == selectedId || e.targetNodeId == selectedId
                     drawLine(
                         color = when {
-                            selectedId == null -> Color(0xFF2A2F3D)
-                            related -> Color(0xFF4A5170)
-                            else -> Color(0xFF171B26)
+                            selectedId == null -> edgeDefault
+                            related -> edgeSelected
+                            else -> edgeDimmed
                         },
                         start = a, end = b,
                         strokeWidth = 1.5f.dp.toPx(), cap = StrokeCap.Round)
@@ -313,7 +332,11 @@ fun GraphCanvas(
                             (it.sourceNodeId == selectedId && it.targetNodeId == n.id) ||
                             (it.targetNodeId == selectedId && it.sourceNodeId == n.id)
                         }
-                val color = nodeColor(n.type.name)
+                val color = when {
+                    isRoot -> rootColor
+                    isSel -> selectedColor
+                    else -> nodeColor(n.type.name)
+                }
                 val alpha = if (dimmed) 0.25f else 1f
                 val r = when {
                     isSel -> nodeRadius * 1.25f

@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.shrey4sh.rabbithole.core.ui.Accent
 import com.shrey4sh.rabbithole.core.ui.Surface1
 import com.shrey4sh.rabbithole.core.ui.nodeColor
 import com.shrey4sh.rabbithole.domain.model.Node
@@ -110,7 +109,7 @@ fun GraphScreen(
                 if (depth > 0) {
                     Text("Depth $depth",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Accent, modifier = Modifier.padding(top = 2.dp))
+                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 2.dp))
                 }
             }
             IconButton(onClick = { showSearch = !showSearch },
@@ -174,7 +173,7 @@ fun GraphScreen(
                 .background(Color.Black.copy(alpha = 0.65f)).padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Keep going?", color = Color(0xFFB8BECC), fontSize = 13.sp)
+                Text("Keep going?", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 androidx.compose.material3.FilledTonalButton(onClick = {
                     onTakeMeDeeper(selected.id)
                 }) { Text("🐇 TAKE ME DEEPER", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
@@ -305,7 +304,7 @@ fun Legend(modifier: Modifier = Modifier) {
         types.forEach { (t, label) ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Box(Modifier.size(7.dp).clip(CircleShape).background(nodeColor(t)))
-                Text(label, style = MaterialTheme.typography.labelSmall, color = Color(0xFFB8BECC))
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

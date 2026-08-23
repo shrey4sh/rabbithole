@@ -67,7 +67,7 @@ class WikipediaTopicRepository @Inject constructor(
 
         // 4. AI ranks + labels the connections (evidence: only candidate titles allowed)
         val ranked = aiRanker.rankConnections(rootPage.title, summary?.extract, linkTitles)
-            .take(12)
+            .take(10) // depth-1 graph: ~10 strong nodes, never a wall of search results
 
         val rootNode = Node(
             id = rootId,

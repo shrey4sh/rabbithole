@@ -2,59 +2,32 @@
 
 **Start anywhere. See where it takes you.**
 
-An Android discovery & knowledge-exploration app. Enter any topic — a person, movie,
-game, place, concept — and RabbitHole builds an interactive graph of related concepts
-you can endlessly explore.
+An Android app that turns any topic into an interactive map of connected knowledge.
+Search a person, game, place, or concept — RabbitHole resolves what you mean, finds
+real relationships, and lets you explore deeper, one node at a time.
 
-*Think: Obsidian's graph view meets Arc Search's minimalism.*
+## Features
 
-> ⚠️ **Status: Phase 1–2 of 7** — working UI with mocked data (Cyberpunk 2077, AI, Joji,
-> Delhi, Black Holes, WWII, Formula 1). Real Wikipedia/Wikidata + AI layers come in Phase 5+.
+- **Smart search** — ambiguous queries ask before guessing; specific ones just work
+- **Curated graphs** — 8–10 strong, sourced connections per level, never raw search spam
+- **Take Me Deeper** — expand any node into its own connections and follow the path down
+- **Full touch canvas** — pan, drag nodes, pinch to zoom; labels stay readable
+- **Material You** — accent colors adapt to your wallpaper on a near-black dark canvas
 
-## Screenshots
+## Install
 
-| Home | Discovery | Graph |
-|---|---|---|
-| search-first home | animated discovery flow | interactive force-graph |
-
-*(add after first build)*
-
-## Current features (Phase 1–2)
-
-- 🎨 Dark-first Material 3 theme (#08090D canvas, violet/cyan accents)
-- 🏠 Minimal search-first home: rotating examples, quick-start chips
-- ✨ Animated "Building your rabbit hole…" discovery flow
-- 🕸️ Interactive knowledge graph:
-  - pinch zoom · two-finger pan · single-finger pan · node drag
-  - tap to select → highlights connections, dims unrelated nodes
-  - zoom in/out/reset floating controls
-  - search-within-graph
-  - compact type-color legend
-- 📋 Node bottom sheet: description, connected-to list, action buttons
-- 🧭 Bottom navigation: Home / Explore / Saved / History / Settings
+Grab [`rabbithole-v1.0.0.apk`](../../releases/latest/download/rabbithole-v1.0.0.apk)
+from Releases and sideload it (Android 10+).
 
 ## Stack
 
-Kotlin · Jetpack Compose · Material 3 · Navigation Compose · Coroutines/Flow ·
-Retrofit + OkHttp · Kotlin Serialization · Room · Coil · Hilt
+Kotlin · Jetpack Compose · Material 3 · Room · Hilt · OkHttp · Wikipedia API · AI ranking
 
 ## Build
 
 ```bash
 ./gradlew assembleDebug
 ```
-
-APK at `app/build/outputs/apk/debug/app-debug.apk`. CI builds on every push.
-
-## Roadmap
-
-- [x] **P1:** theme, navigation, home, bottom bar
-- [x] **P2:** search, mock data, graph render, zoom/pan, selection
-- [ ] P3: Take Me Deeper, Rabbit Hole mode, exploration path
-- [ ] P4: Saved / History / Share persistence
-- [ ] P5: Wikipedia/Wikidata API integration
-- [ ] P6: AI relationship ranking with source verification
-- [ ] P7: performance & accessibility polish
 
 ## License
 

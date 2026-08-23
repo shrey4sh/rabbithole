@@ -54,6 +54,55 @@ class WikipediaTopicRepository @Inject constructor(
         emit(hole)
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * LIVE "Take Me Deeper": expand around [fromTitle] using its own Wikipedia article's
+     * lead links + AI ranking. Returns clean new nodes + edges connecting them to fromId.
+     * Replaces the old mock layer that produced ID-based garbage titles.
+     */
+    suspend fun expandAround(
+        fromId: String,
+        fromTitle: String,
+        existingTitles: Set<String>,
+    ): Pair<List<Node>, List<Edge>> {
+        val api = WikipediaApi()
+        val summary = runCatching { api.summary(fromTitle) }.getOrNull()
+        val lead = runCatching { api.leadLinks(fromTitle) }.getOrElse { emptyList() }
+        val pool = if (lead.size >= 15) lead else lead +
+                runCatching { api.allLinks(fromTitle) }.getOrElse { emptyList() }
+
+        val candidates = curateCandidates(fromTitle, pool).take(20)
+        if (candidates.isEmpty()) return emptyList<Node>() to emptyList()
+
+        val ranked = aiRanker.rankConnections(fromTitle, summary?.extract, candidates).take(8)
+
+        val newNodes = ranked.mapNotNull { r ->
+            val title = EntityNormalizer.cleanTitle(r.title) ?: return@mapNotNull null
+            // skip duplicates of anything already on the graph
+            if (existingTitles.any { EntityNormalizer.dedupKey(it) == EntityNormalizer.dedupKey(title) })
+                return@mapNotNull null
+            val s = runCatching { api.summary(title) }.getOrNull()
+            Node(
+                id = "wiki:${title.hashCode()}",
+                title = title,
+                description = EntityNormalizer.cleanDescription(s?.extract) ?: r.reason,
+                type = guessType(title, s?.extract?.take(200)),
+                imageUrl = s?.thumbnail?.source,
+                sourceUrls = listOf(wikiUrl(title)),
+            )
+        }.distinctBy { EntityNormalizer.dedupKey(it.title) }
+
+        val newEdges = newNodes.map {
+            Edge(
+                id = "$fromId-${it.id}-RELATED_TO-${System.currentTimeMillis()}",
+                sourceNodeId = fromId,
+                targetNodeId = it.id,
+                relationship = ranked.find { r -> r.title.equals(it.title, true) }?.relationship ?: "RELATED_TO",
+                sources = listOf(wikiUrl(fromTitle)),
+            )
+        }
+        return newNodes to newEdges
+    }
+
     override suspend fun randomTopic(): RabbitHole {
         val starters = listOf(
             "Black holes", "Cyberpunk 2077", "Delhi", "Enigma machine",

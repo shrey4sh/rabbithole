@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shrey4sh.rabbithole.data.mock.DeeperLayers
 import com.shrey4sh.rabbithole.data.mock.MockData
+import com.shrey4sh.rabbithole.data.repository.WikipediaTopicRepository
 import com.shrey4sh.rabbithole.domain.model.Edge
 import com.shrey4sh.rabbithole.domain.model.Node
 import com.shrey4sh.rabbithole.domain.model.RabbitHole
@@ -92,7 +93,8 @@ class GraphViewModel @Inject constructor(
         hole.nodes.find { it.id == nodeId }?.title ?: nodeId
 
     /**
-     * TAKE ME DEEPER: expand from a node — add new nodes/edges organically.
+     * TAKE ME DEEPER: live expansion around the selected node via the Wikipedia+AI
+     * pipeline. Falls back to mock layers only when offline.
      */
     fun takeMeDeeper(hole: RabbitHole, fromNodeId: String) {
         if (_expanding.value) return
@@ -100,16 +102,38 @@ class GraphViewModel @Inject constructor(
             _expanding.value = true
             delay(350) // organic feel
 
-            val layer = DeeperLayers.get(fromNodeId, titleOf(hole, fromNodeId))
-            val existingIds = hole.nodes.map { it.id }.toSet()
+            val fromTitle = titleOf(hole, fromNodeId)
+            val existingTitles = hole.nodes.map { it.title }.toSet()
 
-            val newNodes = DeeperLayers.nodesFor(layer.newNodeIds)
-                .filter { it.id !in existingIds }
-            val newEdges = layer.newEdges.map { (a, b, rel) ->
-                Edge(id = "$a-$b-$rel-${System.currentTimeMillis()}",
-                     sourceNodeId = a, targetNodeId = b, relationship = rel)
-            }.filter { e -> e.sourceNodeId in existingIds + newNodes.map { it.id }
-                          && e.targetNodeId in existingIds + newNodes.map { it.id } }
+            val (newNodes, newEdges) = (repo as? WikipediaTopicRepository)
+                ?.expandAround(fromNodeId, fromTitle, existingTitles)
+                ?: (emptyList<Node>() to emptyList())
+
+            if (newNodes.isEmpty()) {
+                // offline / no results: fall back to mock layer so exploration never dead-ends
+                val layer = DeeperLayers.get(fromNodeId, fromTitle)
+                val existingIds = hole.nodes.map { it.id }.toSet()
+                val mockNodes = DeeperLayers.nodesFor(layer.newNodeIds)
+                    .filter { it.id !in existingIds }
+                val mockEdges = layer.newEdges.map { (a, b, rel) ->
+                    Edge(id = "$a-$b-$rel-${System.currentTimeMillis()}",
+                         sourceNodeId = a, targetNodeId = b, relationship = rel)
+                }.filter { e -> e.sourceNodeId in existingIds + mockNodes.map { it.id } &&
+                              e.targetNodeId in existingIds + mockNodes.map { it.id } }
+                val updated = hole.copy(
+                    nodes = hole.nodes + mockNodes,
+                    edges = hole.edges + mockEdges,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                _state.value = GraphUiState.Ready(updated)
+                _depth.value += 1
+                val firstNew = mockNodes.firstOrNull()
+                if (firstNew != null) {
+                    _path.value = _path.value + PathEntry(firstNew.id, firstNew.title, fromTitle)
+                }
+                _expanding.value = false
+                return@launch
+            }
 
             val updated = hole.copy(
                 nodes = hole.nodes + newNodes,
@@ -118,9 +142,6 @@ class GraphViewModel @Inject constructor(
             )
             _state.value = GraphUiState.Ready(updated)
             _depth.value += 1
-
-            // append to path
-            val fromTitle = titleOf(hole, fromNodeId)
             val firstNew = newNodes.firstOrNull()
             if (firstNew != null) {
                 _path.value = _path.value + PathEntry(firstNew.id, firstNew.title, fromTitle)

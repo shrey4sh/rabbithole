@@ -52,17 +52,22 @@ class WikipediaTopicRepository @Inject constructor(
         val rootPage = candidates.await().firstOrNull() ?: return@coroutineScope null
         val rootId = "wiki:${rootPage.pageid}"
 
-        // 2. parallel: summary + links + AI ranking of links
+        // 2. parallel: summary + lead-section wikilinks (high-signal) + full link pool (backup)
         val summaryDeferred = async { runCatching { api.summary(rootPage.title) }.getOrNull() }
-        val linksDeferred = async { runCatching { api.links(rootPage.title, limit = 40) }.getOrElse { emptyList() } }
+        val leadDeferred = async { runCatching { api.leadLinks(rootPage.title) }.getOrElse { emptyList() } }
+        val allLinksDeferred = async { runCatching { api.allLinks(rootPage.title) }.getOrElse { emptyList() } }
         val summary = summaryDeferred.await()
-        val linkTitles = linksDeferred.await()
-            .filter { it.length in 4..40 && !it.contains("list", true) }
-            .distinct()
-            .take(20)
 
-        // 3. AI ranks + labels the connections (evidence: only candidate titles allowed)
+        // 3. Curator stage A: normalize + filter weak/irrelevant candidates BEFORE any AI call.
+        //    Lead links are definitional; the full pool fills in if the intro is sparse.
+        val lead = leadDeferred.await()
+        val rawPool = if (lead.size >= 15) lead else lead + allLinksDeferred.await()
+        val linkTitles = curateCandidates(rootPage.title, rawPool)
+            .take(24)
+
+        // 4. AI ranks + labels the connections (evidence: only candidate titles allowed)
         val ranked = aiRanker.rankConnections(rootPage.title, summary?.extract, linkTitles)
+            .take(12)
 
         val rootNode = Node(
             id = rootId,
@@ -113,6 +118,61 @@ class WikipediaTopicRepository @Inject constructor(
 
     private fun wikiUrl(title: String) =
         "https://en.wikipedia.org/wiki/${java.net.URLEncoder.encode(title.replace(' ', '_'), "UTF-8")}"
+
+    /**
+     * Curator stage A — normalize + heuristic relevance pre-scoring of raw wiki links.
+     * Removes navigation/junk pages, penalizes obscure fragments, boosts candidates that
+     * share a meaningful term with the root or are strong entity titles. The AI then
+     * ranks the surviving pool; this stage just guarantees the pool isn't alphabetical junk.
+     */
+    private fun curateCandidates(rootTitle: String, raw: List<String>): List<String> {
+        val stop = setOf("a", "an", "the", "of", "in", "on", "and", "for", "to", "with", "by", "at")
+        val rootTerms = rootTitle.lowercase().split(Regex("\\W+")).filter { it !in stop && it.length > 2 }.toSet()
+
+        val disallow = listOf(
+            "list of", "index of", "outline of", "timeline of", "category:", "template:",
+            "portal:", "wikipedia:", "disambiguation", "(disambiguation)", "stub",
+            "history of", "bibliography", "glossary", "appendix", "references", "external links",
+        )
+
+        data class Scored(val title: String, val score: Double)
+
+        val scored = raw.asSequence()
+            .distinct()
+            .filter { t -> t.length in 4..60 }
+            .filter { t -> disallow.none { t.lowercase().contains(it) } }
+            .map { t ->
+                val lower = t.lowercase()
+                var s = 0.0
+                // shared terms with root: signal, but capped — otherwise every
+                // "... in Cyberpunk" page outranks William Gibson / Blade Runner
+                val terms = lower.split(Regex("\\W+")).filter { it !in stop && it.length > 2 }.toSet()
+                s += 2.0 * minOf((terms intersect rootTerms).size, 2)
+                // proper multiword entity titles tend to be real subjects
+                if (t.contains(' ')) s += 0.8
+                // penalize leading numerals / fragments like "1. Outside", "3D film"
+                if (t.firstOrNull()?.isDigit() == true) s -= 2.5
+                // penalize all-caps acronyms and single obscure words
+                if (t.length <= 6 && t == t.uppercase()) s -= 1.5
+                // penalize parenthetical-heavy titles (disambiguation leftovers)
+                if (t.count { it == '(' } > 1) s -= 1.0
+                // penalize generic / non-entity titles that make poor graph nodes
+                listOf("isbn", "identifier", "doi ", "pmid", "issn", "institute of",
+                       "association", "international", "journal", "university", "press)",
+                       "generation", "western", "opera")
+                    .any { lower.contains(it) }.let { if (it) s -= 2.0 }
+                // small boost for genre-defining keywords relative to any root
+                listOf("fiction", "novel", "film", "game", "genre", "universe", "series",
+                       "company", "studio", "director", "writer", "theory", "effect")
+                    .any { lower.endsWith(it) || lower.endsWith(it + "s") }.let { if (it) s += 0.5 }
+                Scored(t, s)
+            }
+            .filter { it.score > -1.0 }
+            .sortedByDescending { it.score }
+            .map { it.title }
+            .toList()
+        return scored
+    }
 
     private fun guessType(title: String, description: String? = null): NodeType {
         val text = (title + " " + (description ?: "")).lowercase()

@@ -87,13 +87,50 @@ fun GraphCanvas(
     }
 
     val baseRadius = 26.dp.value
+    // Light readable label colors (dark theme)
+    val labelColorPrimary = android.graphics.Color.parseColor("#F2F0F5")
+    val labelColorSecondary = android.graphics.Color.parseColor("#C8C4D0")
     val labelPaint = remember {
         android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             textSize = 15.dp.value
             textAlign = android.graphics.Paint.Align.CENTER
             isFakeBoldText = true
-            setShadowLayer(6f, 0f, 0f, android.graphics.Color.BLACK)
+            color = labelColorPrimary
+            // very subtle shadow for separation only — never a substitute for light text
+            setShadowLayer(2f, 0f, 1f, android.graphics.Color.argb(120, 0, 0, 0))
         }
+    }
+
+    // ---- Label placement state -------------------------------------------------
+    // Placed-label rects tracked across the frame so two visible labels NEVER overlap.
+    class LabelRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+        fun intersects(o: LabelRect): Boolean =
+            left < o.right && o.left < right && top < o.bottom && o.bottom > top
+        fun overlapArea(o: LabelRect): Float {
+            val w = minOf(right, o.right) - maxOf(left, o.left)
+            val h = minOf(bottom, o.bottom) - maxOf(top, o.top)
+            return if (w > 0 && h > 0) w * h else 0f
+        }
+    }
+    class Placement(val nodeId: String, val center: Offset, val rect: LabelRect)
+
+    fun shorten(t: String, max: Int) = if (t.length > max) t.take(max - 1).trimEnd() + "…" else t
+
+    /** Priority: lower = more important. Root > selected > direct neighbors > rest. */
+    fun labelPriority(n: Node): Int = when {
+        n.id == nodes.firstOrNull()?.id -> 0
+        n.id == selectedId -> 1
+        edges.any { (it.sourceNodeId == selectedId && it.targetNodeId == n.id) ||
+                    (it.targetNodeId == selectedId && it.sourceNodeId == n.id) } -> 2
+        else -> 3 + nodes.indexOf(n) % 8 // stable tie-break
+    }
+
+    /** Zoom-driven label budget: fewer labels when zoomed out, more when zoomed in. */
+    fun maxVisibleLabels(scale: Float): Int = when {
+        scale < 0.55f -> 7
+        scale < 0.8f -> 11
+        scale < 1.3f -> 16
+        else -> nodes.size
     }
 
     fun nodeAt(screenPos: Offset): Node? {
@@ -152,6 +189,102 @@ fun GraphCanvas(
         val oy = canvasState.offset.y
         val nodeRadius = baseRadius * s.coerceIn(0.5f, 2.5f)
 
+        // ---- Global label pass: place labels by priority so none ever overlap ----
+        val s2 = canvasState.scale
+        val placed = mutableListOf<Placement>()
+        val screenW = size.width / s2.coerceAtLeast(0.001f)
+        val screenH = size.height / s2.coerceAtLeast(0.001f)
+
+        val drawOrder = nodes.sortedBy { labelPriority(it) }
+        var shown = 0
+        val budget = maxVisibleLabels(canvasState.scale)
+        for (n in drawOrder) {
+            val p = nodePositions[n.id] ?: continue
+            if (shown >= budget) break
+
+            val isSel = n.id == selectedId
+            val dimmed = selectedId != null && !isSel &&
+                    edges.none {
+                        (it.sourceNodeId == selectedId && it.targetNodeId == n.id) ||
+                        (it.targetNodeId == selectedId && it.sourceNodeId == n.id)
+                    }
+            if (dimmed && !isSel) continue // never label unrelated/dimmed nodes when something is selected
+
+            // progressive shortening: try longer text first, shorten only under pressure
+            val maxLen = when (labelPriority(n)) {
+                0, 1 -> 22
+                2 -> 18
+                else -> 14
+            }
+            var labelText = shorten(n.title, maxLen)
+            val rForLabel = if (n == nodes.firstOrNull()) nodeRadius * 1.15f
+                            else if (isSel) nodeRadius * 1.25f else nodeRadius
+            labelPaint.textSize = 15.dp.toPx() * canvasState.scale.coerceIn(0.7f, 1.6f)
+            val th = labelPaint.fontSpacing
+
+            fun rectFor(c: Offset): LabelRect {
+                val tw = labelPaint.measureText(labelText)
+                return LabelRect(c.x - tw/2 - 4f, c.y - th, c.x + tw/2 + 4f, c.y + 3f)
+            }
+
+            // candidate positions around the node
+            val r = rForLabel
+            val candidates = listOf(
+                p + Offset(0f, r + th),                 // below
+                p + Offset(0f, -(r + th * 0.35f)),      // above
+                p + Offset(labelPaint.measureText(labelText)/2 + r + 4f, 0f),  // right
+                p + Offset(-(labelPaint.measureText(labelText)/2 + r + 4f), 0f),// left
+                p + Offset(-(r*0.8f), -(r + th)),       // upper-left
+                p + Offset(r*0.8f, -(r + th)),          // upper-right
+                p + Offset(-(r*0.8f), r + th),          // lower-left
+                p + Offset(r*0.8f, r + th),             // lower-right
+            )
+
+            var best: Placement? = null
+            var bestScore = Float.MAX_VALUE
+            for (cand in candidates) {
+                val rect = rectFor(cand)
+                var score = 0f
+                // hard rule: overlap with any placed label disqualifies
+                if (placed.any { rect.intersects(it.rect) }) continue
+                // penalty: covering another node circle
+                for ((_, otherP) in nodePositions) {
+                    if (otherP != p && otherP.x in rect.left..rect.right &&
+                        otherP.y in rect.top..rect.bottom) score += 1000f
+                }
+                // penalty: crossing edges (sample edge midpoints)
+                for (e in edges) {
+                    val a = nodePositions[e.sourceNodeId] ?: continue
+                    val b = nodePositions[e.targetNodeId] ?: continue
+                    val mx = (a.x + b.x) / 2f; val my = (a.y + b.y) / 2f
+                    if (mx in rect.left..rect.right && my in rect.top..rect.bottom) score += 60f
+                }
+                // penalty: off-screen / near boundaries
+                if (rect.left < 8f || rect.right > screenW - 8f ||
+                    rect.top < 90f/s2 || rect.bottom > screenH - 120f/s2) score += 400f
+                // prefer below/above slightly
+                val posIdx = candidates.indexOf(cand)
+                score += posIdx * 5f
+                if (score < bestScore) { bestScore = score; best = Placement(n.id, cand, rect) }
+            }
+
+            // still no spot? progressively shorten and retry once
+            if (best == null && labelText.length > 8) {
+                labelText = shorten(n.title.replace(Regex("\\s*\\(.*?\\)$"), ""), maxLen - 4)
+                val c = p + Offset(0f, r + th)
+                val rect = rectFor(c)
+                if (placed.none { rect.intersects(it.rect) } &&
+                    rect.right <= screenW - 8f && rect.left >= 8f) {
+                    best = Placement(n.id, c, rect)
+                }
+            }
+
+            if (best != null) {
+                placed.add(best)
+                shown++
+            }
+        }
+
         withTransform({ scale(s, s, pivot = Offset.Zero); translate(ox, oy) }) {
 
             edges.forEach { e ->
@@ -173,6 +306,7 @@ fun GraphCanvas(
 
             nodes.forEach { n ->
                 val p = nodePositions[n.id] ?: return@forEach
+                val isRoot = n.id == nodes.firstOrNull()?.id
                 val isSel = n.id == selectedId
                 val dimmed = selectedId != null && !isSel &&
                         edges.none {
@@ -183,59 +317,39 @@ fun GraphCanvas(
                 val alpha = if (dimmed) 0.25f else 1f
                 val r = when {
                     isSel -> nodeRadius * 1.25f
-                    // root emphasis: first node slightly larger + stronger outline
-                    n == nodes.first() -> nodeRadius * 1.15f
+                    isRoot -> nodeRadius * 1.15f
                     else -> nodeRadius
                 }
+
+                // subtle root glow — small halo ring, not oversized
+                if (isRoot) drawCircle(color.copy(alpha = 0.12f * alpha), r * 1.45f, p)
 
                 if (isSel) drawCircle(color.copy(alpha = 0.18f), r * 1.8f, p)
                 drawCircle(color.copy(alpha = 0.22f * alpha), r, p)
                 drawCircle(color.copy(alpha = alpha), r, p,
-                    style = Stroke((if (n == nodes.first()) 3.5f else 2.5f).dp.toPx()))
+                    style = Stroke((if (isRoot) 3.5f else 2.5f).dp.toPx()))
                 drawCircle(color.copy(alpha = alpha), r * 0.45f, p)
+            }
 
-                // title under node — collision-aware placement
-                drawIntoCanvas { cv ->
-                    val label = if (n.title.length > 18) n.title.take(17) + "…" else n.title
-                    labelPaint.alpha = (255 * alpha).toInt()
-                    labelPaint.textSize = 15.dp.toPx() * s.coerceIn(0.7f, 1.6f)
-                    val tw = labelPaint.measureText(label)
-                    val th = labelPaint.fontSpacing
-
-                    // candidate positions around node
-                    val candidates = listOf(
-                        p + Offset(0f, r + th),          // below
-                        p + Offset(0f, -(r + th)),       // above
-                        p + Offset(tw/2 + r, 0f),         // right
-                        p + Offset(-(tw/2 + r), 0f),      // left
-                        p + Offset(-(tw/2 + r*0.7f), -(r*0.7f + th)),
-                        p + Offset(tw/2 + r*0.7f, -(r*0.7f + th)),
-                        p + Offset(-(tw/2 + r*0.7f), r*0.7f + th),
-                        p + Offset(tw/2 + r*0.7f, r*0.7f + th),
-                    )
-
-                    var best = candidates[0]
-                    var bestOverlap = Float.MAX_VALUE
-                    candidates.forEach { c ->
-                        val rect = android.graphics.RectF(
-                            c.x - tw/2 - 4f, c.y - th, c.x + tw/2 + 4f, c.y)
-                        var overlap = 0f
-                        nodePositions.forEach { (otherId, otherP) ->
-                            if (otherId != n.id) {
-                                val or_ = nodeRadius
-                                val oc = Offset(otherP.x, otherP.y)
-                                if (rect.contains(oc.x, oc.y)) overlap += 1000f
-                                // check against already-drawn label rects approximated by their node pos
-                                if ((oc - c).getDistance() < th) overlap += 500f
-                            }
-                        }
-                        if (overlap < bestOverlap) {
-                            bestOverlap = overlap
-                            best = c
-                        }
+            // draw all accepted labels AFTER nodes so text sits on top cleanly
+            drawIntoCanvas { cv ->
+                placed.forEach { pl ->
+                    val owner = nodes.firstOrNull { it.id == pl.nodeId } ?: return@forEach
+                    val isSel = owner.id == selectedId
+                    val isNeighbor = edges.any {
+                        (it.sourceNodeId == selectedId && it.targetNodeId == owner.id) ||
+                        (it.targetNodeId == selectedId && it.sourceNodeId == owner.id)
                     }
-
-                    cv.nativeCanvas.drawText(label, best.x, best.y, labelPaint)
+                    labelPaint.color = when {
+                        isSel -> android.graphics.Color.WHITE
+                        isNeighbor -> labelColorPrimary
+                        else -> labelColorSecondary
+                    }
+                    val dimmedOwner = selectedId != null && !isSel && !isNeighbor
+                    labelPaint.alpha = if (dimmedOwner) 100 else 255
+                    cv.nativeCanvas.drawText(
+                        shorten(owner.title, if (owner.id == nodes.firstOrNull()?.id || isSel) 22 else 18),
+                        pl.center.x, pl.center.y, labelPaint)
                 }
             }
         }

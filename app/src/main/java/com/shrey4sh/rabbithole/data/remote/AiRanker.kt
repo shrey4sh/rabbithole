@@ -53,7 +53,10 @@ class AiRanker(
                 "For each candidate classify the relationship to the root using ONE of: " +
                 "CREATED_BY, INSPIRED_BY, LOCATED_IN, MEMBER_OF, INFLUENCED, SAME_GENRE, " +
                 "OCCURRED_IN, WORKED_ON, BASED_ON, RELATED_TO.\n" +
-                "Pick the 8 most interesting and diverse. Respond ONLY with JSON array: " +
+                "Rules: pick the 8-12 STRONGEST and most DIVERSE connections (mix people, works, " +
+                "concepts, places where possible). Skip obscure or weakly related entries. " +
+                "Every connection must be a well-known, defensible relationship. " +
+                "Respond ONLY with JSON array: " +
                 """[{"title":"<exact title>","relationship":"<LABEL>","reason":"<max 15 words>"}]"""
 
         return runCatching {
@@ -98,9 +101,9 @@ class AiRanker(
         }
     }
 
-    /** Deterministic fallback when AI is unavailable — keeps app functional. */
+    /** Deterministic fallback when AI is unavailable — prefers candidates sharing root terms. */
     private fun fallbackRank(candidates: List<String>): List<RankedLink> =
-        candidates.take(8).map { RankedLink(it, "RELATED_TO", "") }
+        candidates.take(10).map { RankedLink(it, "RELATED_TO", "Connected via Wikipedia links") }
 
     private fun String.toJsonStr(): String {
         val sb = StringBuilder("\"")

@@ -20,6 +20,11 @@ sealed interface GraphUiState {
     data class Ready(val hole: RabbitHole) : GraphUiState
     data object Empty : GraphUiState
     data class Error(val message: String) : GraphUiState
+    /** Query is ambiguous — show clean entity choices before building the graph. */
+    data class Disambiguate(
+        val query: String,
+        val options: List<com.shrey4sh.rabbithole.domain.model.KnowledgeEntity>,
+    ) : GraphUiState
 }
 
 @HiltViewModel
@@ -55,6 +60,23 @@ class GraphViewModel @Inject constructor(
                     _state.value = GraphUiState.Empty
                 }
             }
+        }
+    }
+
+    /** User picked a meaning from the disambiguation sheet — build the graph around it. */
+    fun chooseEntity(entity: com.shrey4sh.rabbithole.domain.model.KnowledgeEntity) {
+        _state.value = GraphUiState.Loading
+        viewModelScope.launch {
+            (repo as? com.shrey4sh.rabbithole.data.repository.WikipediaTopicRepository)
+                ?.resolveChosen(entity)
+                ?.collect { hole ->
+                    if (hole != null) {
+                        _state.value = GraphUiState.Ready(hole)
+                        _path.value = listOf(PathEntry(hole.rootNodeId, titleOf(hole, hole.rootNodeId), null))
+                    } else {
+                        _state.value = GraphUiState.Empty
+                    }
+                }
         }
     }
 

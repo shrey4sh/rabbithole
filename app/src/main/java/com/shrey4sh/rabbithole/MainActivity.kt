@@ -42,6 +42,20 @@ import com.shrey4sh.rabbithole.ui.placeholder.EmptyScreen
 import com.shrey4sh.rabbithole.ui.saved.SavedScreen
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -167,6 +181,49 @@ fun RootApp(storage: LocalStorageRepository) {
 }
 
 @Composable
+private fun DisambiguationSheet(
+    query: String,
+    options: List<com.shrey4sh.rabbithole.domain.model.KnowledgeEntity>,
+    onChoose: (com.shrey4sh.rabbithole.domain.model.KnowledgeEntity) -> Unit,
+) {
+    val icons = listOf("🎮", "🧠", "🎲", "🎬", "🎵")
+    Column(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 24.dp, vertical = 64.dp)
+    ) {
+        Text("What do you mean by",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground)
+        Text("“$query”?",
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(28.dp))
+        options.take(5).forEachIndexed { i, e ->
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .clickable { onChoose(e) }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(icons[i % icons.size], fontSize = 26.sp)
+                Column {
+                    Text(e.canonicalTitle,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface)
+                    e.description?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun GraphRoute(
     vm: GraphViewModel,
     storage: LocalStorageRepository,
@@ -176,6 +233,10 @@ private fun GraphRoute(
 ) {
     when (val s = vm.state.collectAsState().value) {
         is GraphUiState.Loading -> DiscoveryLoadingScreen(loadingTopic)
+        is GraphUiState.Disambiguate -> DisambiguationSheet(
+            query = s.query, options = s.options,
+            onChoose = { vm.chooseEntity(it) },
+        )
         is GraphUiState.Ready -> {
             // auto-save every discovered hole to history
             LaunchedEffect(s.hole.id) { storage.saveHole(s.hole) }

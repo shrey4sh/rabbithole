@@ -4,6 +4,8 @@ import com.shrey4sh.rabbithole.data.mock.MockData
 import com.shrey4sh.rabbithole.data.remote.AiRanker
 import com.shrey4sh.rabbithole.data.remote.WikipediaApi
 import com.shrey4sh.rabbithole.domain.model.Edge
+import com.shrey4sh.rabbithole.domain.model.EntityNormalizer
+import com.shrey4sh.rabbithole.domain.model.KnowledgeEntity
 import com.shrey4sh.rabbithole.domain.model.Node
 import com.shrey4sh.rabbithole.domain.model.NodeType
 import com.shrey4sh.rabbithole.domain.model.RabbitHole
@@ -18,19 +20,37 @@ import kotlinx.coroutines.flow.flowOn
 import javax.inject.Inject
 
 /**
- * Phase 5+6: Wikipedia retrieval + AI ranking, with graceful mock fallback offline.
- * AI reasons over retrieved candidates only — never invents facts.
+ * Curated knowledge pipeline:
+ * query → EntityResolver → candidates → normalize → dedupe → AI rank → validate → graph.
+ * Only entities with clean titles and validated relationships reach the UI.
  */
 class WikipediaTopicRepository @Inject constructor(
     private val wiki: WikipediaApi,
     private val aiRanker: AiRanker,
 ) : TopicRepository {
 
+    /** Disambiguation result surfaced to the UI before any graph is built. */
+    data class Disambiguation(val query: String, val options: List<KnowledgeEntity>)
+
     override fun searchTopic(query: String): Flow<RabbitHole?> = flow {
         delay(500) // discovery animation stages rotate
-        val hole = runCatching { buildFromWikipedia(query) }.getOrNull()
-            ?: MockData.search(query)
+
+        // --- Stage 1: entity resolution ---
+        val resolver = EntityResolver(WikipediaApi())
+        val resolution = resolver.resolve(query)
+        val root = resolution.entity ?: run {
+            emit(null); return@flow
+        }
+
+        val hole = runCatching { buildFromRoot(root) }.getOrNull() ?: MockData.search(query)
         if (hole != null) delay(700)
+        emit(hole)
+    }.flowOn(Dispatchers.IO)
+
+    /** Resolve an explicitly chosen alternative (from the disambiguation sheet). */
+    fun resolveChosen(entity: KnowledgeEntity): Flow<RabbitHole?> = flow {
+        val hole = runCatching { buildFromRoot(entity) }.getOrNull()
+        if (hole != null) delay(400)
         emit(hole)
     }.flowOn(Dispatchers.IO)
 
@@ -40,82 +60,74 @@ class WikipediaTopicRepository @Inject constructor(
             "Joji", "Formula 1", "Byzantine Empire", "Marie Curie",
         )
         val topic = starters.random()
-        return runCatching { buildFromWikipedia(topic) }.getOrNull()
+        val resolution = EntityResolver(WikipediaApi()).resolve(topic)
+        return resolution.entity?.let { runCatching { buildFromRoot(it) }.getOrNull() }
             ?: MockData.random()
     }
 
-    private suspend fun buildFromWikipedia(query: String): RabbitHole? = coroutineScope {
+    private suspend fun buildFromRoot(root: KnowledgeEntity): RabbitHole? = coroutineScope {
         val api = WikipediaApi()
 
-        // 1. find root article
-        val candidates = async { api.search(query, limit = 5) }
-        val rootPage = candidates.await().firstOrNull() ?: return@coroutineScope null
-        val rootId = "wiki:${rootPage.pageid}"
-
-        // 2. parallel: summary + lead-section wikilinks (high-signal) + full link pool (backup)
-        val summaryDeferred = async { runCatching { api.summary(rootPage.title) }.getOrNull() }
-        val leadDeferred = async { runCatching { api.leadLinks(rootPage.title) }.getOrElse { emptyList() } }
-        val allLinksDeferred = async { runCatching { api.allLinks(rootPage.title) }.getOrElse { emptyList() } }
+        val summaryDeferred = async { runCatching { api.summary(root.canonicalTitle) }.getOrNull() }
+        val leadDeferred = async { runCatching { api.leadLinks(root.canonicalTitle) }.getOrElse { emptyList() } }
+        val allLinksDeferred = async { runCatching { api.allLinks(root.canonicalTitle) }.getOrElse { emptyList() } }
         val summary = summaryDeferred.await()
 
-        // 3. Curator stage A: normalize + filter weak/irrelevant candidates BEFORE any AI call.
-        //    Lead links are definitional; the full pool fills in if the intro is sparse.
+        // --- Stage 2: candidate normalization + curation ---
         val lead = leadDeferred.await()
         val rawPool = if (lead.size >= 15) lead else lead + allLinksDeferred.await()
-        val linkTitles = curateCandidates(rootPage.title, rawPool)
-            .take(24)
+        val linkTitles = curateCandidates(root.canonicalTitle, rawPool).take(24)
 
-        // 4. AI ranks + labels the connections (evidence: only candidate titles allowed)
-        val ranked = aiRanker.rankConnections(rootPage.title, summary?.extract, linkTitles)
-            .take(10) // depth-1 graph: ~10 strong nodes, never a wall of search results
+        // --- Stage 3: AI ranks the strongest relationships (evidence-bound) ---
+        val ranked = aiRanker.rankConnections(root.canonicalTitle, summary?.extract, linkTitles)
+            .take(10)
 
         val rootNode = Node(
-            id = rootId,
-            title = rootPage.title,
-            description = rootPage.description ?: "",
-            type = guessType(rootPage.title, summary?.extract?.take(400) ?: rootPage.description),
-            imageUrl = rootPage.thumbnail?.source,
-            sourceUrls = listOf(wikiUrl(rootPage.title)),
+            id = root.id,
+            title = root.canonicalTitle,
+            description = EntityNormalizer.cleanDescription(summary?.extract) ?: root.description ?: "",
+            type = root.type,
+            imageUrl = root.imageUrl ?: summary?.thumbnail?.source,
+            sourceUrls = listOf(wikiUrl(root.canonicalTitle)),
         )
 
-        // 4. fetch summaries for ranked nodes (parallel, capped)
+        // --- Stage 4: fetch summaries, normalize into clean entities ---
         val relatedNodes = ranked.map { r ->
             coroutineScope {
                 async {
-                    val s = runCatching { api.summary(r.title) }.getOrNull()
-                    // never render a raw identifier as a title; drop candidates without one
-                    val safeTitle = r.title.trim()
-                    if (safeTitle.isEmpty() || safeTitle.all { it.isDigit() }) return@async null
+                    val title = EntityNormalizer.cleanTitle(r.title) ?: return@async null
+                    if (title.equals(root.canonicalTitle, ignoreCase = true)) return@async null
+                    val s = runCatching { api.summary(title) }.getOrNull()
                     Node(
-                        id = "wiki:${safeTitle.hashCode()}",
-                        title = safeTitle,
-                        description = s?.extract?.take(160) ?: r.reason,
-                        type = guessType(safeTitle, s?.extract?.take(200)),
+                        id = "wiki:${title.hashCode()}",
+                        title = title,
+                        description = EntityNormalizer.cleanDescription(s?.extract) ?: r.reason,
+                        type = guessType(title, s?.extract?.take(200)),
                         imageUrl = s?.thumbnail?.source,
-                        sourceUrls = listOf(wikiUrl(safeTitle)),
-                    ) as Node?
+                        sourceUrls = listOf(wikiUrl(title)),
+                    )
                 }
             }
         }.awaitAll().filterNotNull()
 
-        // dedupe by id AND by normalized title (Flicker / flicker / Flicker (light) collapse
-        // to one node unless Wikipedia summaries prove they're distinct pages)
+        // --- Stage 5: dedup by id AND normalized title; keep first (highest-ranked) ---
         val allRelated = relatedNodes
             .filter { it.id != rootNode.id }
             .distinctBy { it.id }
-            .distinctBy { it.title.lowercase().replace(Regex("\\s*\\(.*?\\)"), "").trim() }
+            .distinctBy { EntityNormalizer.dedupKey(it.title) }
+
         val edges = allRelated.map {
             Edge(
                 id = "${rootNode.id}-${it.id}-RELATED_TO",
                 sourceNodeId = rootNode.id,
                 targetNodeId = it.id,
-                relationship = ranked.find { r -> r.title == it.title }?.relationship ?: "RELATED_TO",
-                sources = listOf(wikiUrl(rootPage.title)),
+                relationship = ranked.find { r -> r.title.equals(it.title, true) }?.relationship ?: "RELATED_TO",
+                sources = listOf(wikiUrl(root.canonicalTitle)),
             )
         }
 
         RabbitHole(
-            id = query.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-'),
+            id = root.canonicalTitle.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-'),
             rootNodeId = rootNode.id,
             nodes = listOf(rootNode) + allRelated,
             edges = edges,
@@ -127,10 +139,8 @@ class WikipediaTopicRepository @Inject constructor(
         "https://en.wikipedia.org/wiki/${java.net.URLEncoder.encode(title.replace(' ', '_'), "UTF-8")}"
 
     /**
-     * Curator stage A — normalize + heuristic relevance pre-scoring of raw wiki links.
-     * Removes navigation/junk pages, penalizes obscure fragments, boosts candidates that
-     * share a meaningful term with the root or are strong entity titles. The AI then
-     * ranks the surviving pool; this stage just guarantees the pool isn't alphabetical junk.
+     * Heuristic relevance pre-scoring of raw wiki links — removes navigation/junk,
+     * fragments and non-entity pages so the AI pool is already clean.
      */
     private fun curateCandidates(rootTitle: String, raw: List<String>): List<String> {
         val stop = setOf("a", "an", "the", "of", "in", "on", "and", "for", "to", "with", "by", "at")
@@ -146,29 +156,21 @@ class WikipediaTopicRepository @Inject constructor(
 
         val scored = raw.asSequence()
             .distinct()
-            .filter { t -> t.length in 4..60 }
+            .mapNotNull { EntityNormalizer.cleanTitle(it) }
             .filter { t -> disallow.none { t.lowercase().contains(it) } }
             .map { t ->
                 val lower = t.lowercase()
                 var s = 0.0
-                // shared terms with root: signal, but capped — otherwise every
-                // "... in Cyberpunk" page outranks William Gibson / Blade Runner
                 val terms = lower.split(Regex("\\W+")).filter { it !in stop && it.length > 2 }.toSet()
                 s += 2.0 * minOf((terms intersect rootTerms).size, 2)
-                // proper multiword entity titles tend to be real subjects
                 if (t.contains(' ')) s += 0.8
-                // penalize leading numerals / fragments like "1. Outside", "3D film"
                 if (t.firstOrNull()?.isDigit() == true) s -= 2.5
-                // penalize all-caps acronyms and single obscure words
                 if (t.length <= 6 && t == t.uppercase()) s -= 1.5
-                // penalize parenthetical-heavy titles (disambiguation leftovers)
                 if (t.count { it == '(' } > 1) s -= 1.0
-                // penalize generic / non-entity titles that make poor graph nodes
                 listOf("isbn", "identifier", "doi ", "pmid", "issn", "institute of",
                        "association", "international", "journal", "university", "press)",
                        "generation", "western", "opera")
                     .any { lower.contains(it) }.let { if (it) s -= 2.0 }
-                // small boost for genre-defining keywords relative to any root
                 listOf("fiction", "novel", "film", "game", "genre", "universe", "series",
                        "company", "studio", "director", "writer", "theory", "effect")
                     .any { lower.endsWith(it) || lower.endsWith(it + "s") }.let { if (it) s += 0.5 }
@@ -184,34 +186,25 @@ class WikipediaTopicRepository @Inject constructor(
     private fun guessType(title: String, description: String? = null): NodeType {
         val text = (title + " " + (description ?: "")).lowercase()
         return when {
-            // people: occupations & roles
             listOf("singer", "actor", "actress", "writer", "author", "musician", "footballer",
                    "politician", "scientist", "physicist", "composer", "director", "producer",
                    "artist", "poet", "novelist", "engineer who", "philosopher", "emperor",
                    "king of", "queen", "president", "prime minister", "born 19", "born 18").any { it in text } -> NodeType.PERSON
-            // places
             listOf("city", "town", "village", "district", "country", "state in india",
                    "river", "mountain", "park", "airport", "fort", "temple", "stadium",
                    "capital", "province", "region", "island", "neighbourhood").any { it in text } -> NodeType.PLACE
-            // events
             listOf("war", "battle", "treaty", "revolution", "massacre", "uprising",
                    "tournament", "championship", "ceremony", "protest", "attack", "expedition").any { it in text } -> NodeType.EVENT
-            // games
             listOf("video game", "game developed", "rpg", "action-adventure game",
                    "platform game", "shooter game", "gaming").any { it in text } -> NodeType.GAME
-            // movies
             listOf("film", "movie", "directed by", "cinematic").any { it in text } -> NodeType.MOVIE
-            // music
             listOf("song", "album", "single by", "band", "singer-songwriter", "record producer",
                    "soundtrack").any { it in text } -> NodeType.MUSIC
-            // organizations
             listOf("company", "studio", "corporation", "organization", "agency", "label",
                    "founded in", "developer of").any { it in text } -> NodeType.ORGANIZATION
-            // tech
             listOf("software", "operating system", "network", "internet", "computer",
                    "machine", "engine", "application", "programming", "artificial intelligence",
                    "algorithm", "cryptocurrency", "website").any { it in text } -> NodeType.TECHNOLOGY
-            // books
             listOf("novel", "book", "trilogy", "memoir", "written by").any { it in text } -> NodeType.BOOK
             else -> NodeType.CONCEPT
         }

@@ -83,7 +83,7 @@ private val CATEGORIES = listOf(
     Category("Science", Icons.Default.Science),
     Category("People", Icons.Default.Person),
     Category("Books", Icons.Default.MenuBook),
-    Category("Technology", Icons.Default.Memory),
+    Category("Tech", Icons.Default.Memory),
 )
 
 private val EXAMPLES = listOf(

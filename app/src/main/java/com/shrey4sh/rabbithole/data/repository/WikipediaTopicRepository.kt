@@ -83,20 +83,27 @@ class WikipediaTopicRepository @Inject constructor(
             coroutineScope {
                 async {
                     val s = runCatching { api.summary(r.title) }.getOrNull()
+                    // never render a raw identifier as a title; drop candidates without one
+                    val safeTitle = r.title.trim()
+                    if (safeTitle.isEmpty() || safeTitle.all { it.isDigit() }) return@async null
                     Node(
-                        id = "wiki:${r.title.hashCode()}",
-                        title = r.title,
+                        id = "wiki:${safeTitle.hashCode()}",
+                        title = safeTitle,
                         description = s?.extract?.take(160) ?: r.reason,
-                        type = guessType(r.title, s?.extract?.take(200)),
+                        type = guessType(safeTitle, s?.extract?.take(200)),
                         imageUrl = s?.thumbnail?.source,
-                        sourceUrls = listOf(wikiUrl(r.title)),
-                    )
+                        sourceUrls = listOf(wikiUrl(safeTitle)),
+                    ) as Node?
                 }
             }
-        }.awaitAll()
+        }.awaitAll().filterNotNull()
 
-        // dedupe by id, drop self
-        val allRelated = relatedNodes.filter { it.id != rootNode.id }.distinctBy { it.id }
+        // dedupe by id AND by normalized title (Flicker / flicker / Flicker (light) collapse
+        // to one node unless Wikipedia summaries prove they're distinct pages)
+        val allRelated = relatedNodes
+            .filter { it.id != rootNode.id }
+            .distinctBy { it.id }
+            .distinctBy { it.title.lowercase().replace(Regex("\\s*\\(.*?\\)"), "").trim() }
         val edges = allRelated.map {
             Edge(
                 id = "${rootNode.id}-${it.id}-RELATED_TO",

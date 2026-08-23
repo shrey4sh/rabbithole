@@ -1,9 +1,11 @@
 package com.shrey4sh.rabbithole.ui.graph
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,14 +43,15 @@ fun computeLayout(
 
     val ring1 = others.take(min(8, others.size))
     val ring2 = others.drop(ring1.size)
+    // alternate radii slightly so neighbors never sit at identical distance (avoids crowding)
     ring1.forEachIndexed { i, n ->
         val angle = 2 * Math.PI * i / ring1.size - Math.PI / 2
-        val r = min(width, height) * 0.26f
+        val r = min(width, height) * (if (i % 2 == 0) 0.30f else 0.38f)
         positions[n.id] = Offset(cx + (r * Math.cos(angle)).toFloat(), cy + (r * Math.sin(angle)).toFloat())
     }
     ring2.forEachIndexed { i, n ->
         val angle = 2 * Math.PI * i / maxOf(ring2.size, 1) - Math.PI / 2 + 0.3
-        val r = min(width, height) * 0.4f
+        val r = min(width, height) * 0.46f
         positions[n.id] = Offset(cx + (r * Math.cos(angle)).toFloat(), cy + (r * Math.sin(angle)).toFloat())
     }
     return positions
@@ -59,6 +62,22 @@ class GraphCanvasState {
     var offset by mutableStateOf(Offset.Zero)
 
     fun reset() { scale = 1f; offset = Offset.Zero }
+
+    /** Fit the graph bounding box comfortably into the viewport (center button). */
+    fun fitTo(positions: Map<String, Offset>, viewW: Float, viewH: Float) {
+        if (positions.isEmpty()) return
+        val minX = positions.values.minOf { it.x }; val maxX = positions.values.maxOf { it.x }
+        val minY = positions.values.minOf { it.y }; val maxY = positions.values.maxOf { it.y }
+        val bw = (maxX - minX).coerceAtLeast(1f); val bh = (maxY - minY).coerceAtLeast(1f)
+        val padX = viewW * 0.18f; val padY = viewH * 0.22f
+        val s = minOf((viewW - padX * 2) / bw, (viewH - padY * 2) / bh).coerceIn(0.4f, 1.6f)
+        scale = s
+        offset = Offset(
+            viewW / 2f - (minX + bw / 2f) * s,
+            viewH / 2f - (minY + bh / 2f) * s,
+        )
+    }
+
     fun zoomIn() { scale = (scale * 1.25f).coerceAtMost(3f) }
     fun zoomOut() { scale = (scale / 1.25f).coerceAtLeast(0.35f) }
 }
@@ -77,12 +96,13 @@ fun GraphCanvas(
     edges: List<Edge>,
     selectedId: String?,
     onNodeTap: (Node) -> Unit,
-    onNodeLongPress: (Node) -> Unit,
+    onNodeLongPress: (Node) -> Unit = {},
+    onTapEmpty: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     canvasState: GraphCanvasState = rememberGraphCanvasState(),
 ) {
     var canvasSize by remember { mutableStateOf(Offset(1000f, 1600f)) }
-    var draggingNodeId by remember { mutableStateOf<String?>(null) }
+    val didFit = remember(nodes) { mutableStateOf(false) }
     var nodePositions by remember(nodes) {
         mutableStateOf(computeLayout(nodes, canvasSize.x, canvasSize.y))
     }
@@ -157,39 +177,81 @@ fun GraphCanvas(
 
     Canvas(modifier = modifier
         .fillMaxSize()
-        .pointerInput(nodes) {
-            detectTapGestures(
-                onTap = { pos -> nodeAt(pos)?.let(onNodeTap) },
-                onLongPress = { pos -> nodeAt(pos)?.let(onNodeLongPress) },
-                onDoubleTap = { pos -> nodeAt(pos)?.let(onNodeTap) },
-            )
-        }
-        .pointerInput(nodes, canvasSize) {
-            detectTransformGestures { centroid, pan, zoom, _ ->
-                val newScale = (canvasState.scale * zoom).coerceIn(0.35f, 3f)
-                canvasState.offset = Offset(
-                    (canvasState.offset.x - centroid.x) * (newScale / canvasState.scale) + centroid.x,
-                    (canvasState.offset.y - centroid.y) * (newScale / canvasState.scale) + centroid.y)
-                canvasState.scale = newScale
-                canvasState.offset = Offset(canvasState.offset.x + pan.x, canvasState.offset.y + pan.y)
-            }
-        }
         .pointerInput(nodes, nodePositions) {
-            detectDragGestures(
-                onDragStart = { pos -> draggingNodeId = nodeAt(pos)?.id },
-                onDrag = { change, _ ->
-                    val id = draggingNodeId ?: return@detectDragGestures
-                    change.consume()
-                    val gp = Offset((change.position.x - canvasState.offset.x) / canvasState.scale,
-                                    (change.position.y - canvasState.offset.y) / canvasState.scale)
-                    nodePositions = nodePositions.toMutableMap().apply { put(id, gp) }
-                },
-                onDragEnd = { draggingNodeId = null },
-            )
+            awaitEachGesture {
+                // --- unified gesture layer ---
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val startNode = nodeAt(down.position)
+                var isDragging = false          // true once movement starts
+                var moved = false
+                do {
+                    val event = awaitPointerEvent()
+                    val pointers = event.changes.filter { it.pressed }
+                    when {
+                        // ---- PINCH (2+ fingers): zoom around focal point + pan ----
+                        pointers.size >= 2 -> {
+                            val zoomChange = event.calculateZoom()
+                            val panChange = event.calculateCentroid(useCurrent = true) -
+                                    event.calculateCentroid(useCurrent = false)
+                            if (zoomChange != 1f) {
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                val newScale = (canvasState.scale * zoomChange).coerceIn(0.4f, 3f)
+                                // keep content under the fingers stationary while scaling
+                                canvasState.offset = Offset(
+                                    (canvasState.offset.x - centroid.x) * (newScale / canvasState.scale) + centroid.x,
+                                    (canvasState.offset.y - centroid.y) * (newScale / canvasState.scale) + centroid.y)
+                                canvasState.scale = newScale
+                            }
+                            canvasState.offset += panChange
+                            moved = true
+                            pointers.forEach { it.consume() }
+                        }
+                        // ---- ONE FINGER ----
+                        pointers.size == 1 -> {
+                            val change = pointers.first()
+                            val delta = change.positionChange()
+                            if (!moved && delta.getDistance() > 6f / canvasState.scale) {
+                                moved = true
+                                isDragging = startNode != null   // started on a node → drag node
+                            }
+                            if (moved && !change.isConsumed) {
+                                if (isDragging && startNode != null) {
+                                    // move just this node; edges + label follow automatically
+                                    val gpDelta = Offset(delta.x / canvasState.scale,
+                                                         delta.y / canvasState.scale)
+                                    nodePositions = nodePositions.toMutableMap().apply {
+                                        put(startNode.id, (nodePositions[startNode.id] ?: Offset.Zero) + gpDelta)
+                                    }
+                                } else {
+                                    // empty space → pan whole graph
+                                    canvasState.offset += delta
+                                }
+                                change.consume()
+                            } else if (moved) {
+                                change.consume()
+                            }
+                        }
+                    }
+                } while (event.changes.any { it.pressed })
+
+                // ---- TAPS (no significant movement) ----
+                if (!moved && startNode == null) {
+                    onTapEmpty?.invoke()  // tap on empty space = deselect
+                }
+                if (!moved && startNode != null) {
+                    onNodeTap(startNode)
+                }
+            }
         }
     ) {
         canvasSize = Offset(size.width, size.height)
         if (nodePositions.isEmpty()) return@Canvas
+
+        // first layout: fit the whole graph comfortably on screen
+        if (!didFit.value) {
+            canvasState.fitTo(nodePositions, size.width, size.height)
+            didFit.value = true
+        }
 
         val s = canvasState.scale
         val ox = canvasState.offset.x

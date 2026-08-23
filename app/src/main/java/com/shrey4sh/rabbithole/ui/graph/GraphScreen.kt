@@ -63,6 +63,8 @@ fun GraphScreen(
     var selectedId by remember { mutableStateOf<String?>(null) }
     var showSearch by remember { mutableStateOf(false) }
     var showPath by remember { mutableStateOf(false) }
+    // approximate viewport for the fit-to-screen button
+    val canvasSizePx = remember { mutableStateOf(1080f to 1920f) }
 
     val selected = hole.nodes.find { it.id == selectedId }
 
@@ -74,6 +76,7 @@ fun GraphScreen(
                 selectedId = selectedId,
                 onNodeTap = { selectedId = if (selectedId == it.id) null else it.id },
                 onNodeLongPress = { selectedId = it.id },
+                onTapEmpty = { selectedId = null },
                 modifier = Modifier.fillMaxSize(),
                 canvasState = state,
             )
@@ -139,7 +142,10 @@ fun GraphScreen(
                 containerColor = MaterialTheme.colorScheme.surface) {
                 Icon(Icons.Default.Remove, "Zoom out", tint = MaterialTheme.colorScheme.onSurface)
             }
-            FloatingActionButton(onClick = { state.reset() }, modifier = Modifier.size(42.dp),
+            FloatingActionButton(onClick = {
+                val layout = com.shrey4sh.rabbithole.ui.graph.computeLayout(hole.nodes, canvasSizePx.value.first, canvasSizePx.value.second)
+                state.fitTo(layout, canvasSizePx.value.first, canvasSizePx.value.second)
+            }, modifier = Modifier.size(42.dp),
                 containerColor = MaterialTheme.colorScheme.surface) {
                 Icon(Icons.Default.CenterFocusStrong, "Reset graph", tint = MaterialTheme.colorScheme.onSurface)
             }
